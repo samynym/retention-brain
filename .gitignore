@@ -6,5 +6,6 @@ dist/
 *.log
 coverage/
 .vitest-cache/
+*.tsbuildinfo
 interventions/
 briefing-*.md
