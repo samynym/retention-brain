@@ -4,6 +4,7 @@
     { "path": "./packages/core" },
     { "path": "./packages/sources" },
     { "path": "./packages/sources-revenuecat" },
+    { "path": "./packages/sources-stripe" },
     { "path": "./packages/risk-engine" },
     { "path": "./packages/intervention-agent" },
     { "path": "./packages/eval" },
