@@ -1,0 +1,19 @@
+{
+  "name": "rc-retention-brain",
+  "version": "0.0.1",
+  "type": "module",
+  "bin": { "rc-retention-brain": "./src/index.ts" },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@rcrb/core": "workspace:*",
+    "@rcrb/sources": "workspace:*",
+    "@rcrb/risk-engine": "workspace:*",
+    "@rcrb/intervention-agent": "workspace:*",
+    "@rcrb/eval": "workspace:*",
+    "commander": "^12.1.0",
+    "kleur": "^4.1.5",
+    "tsx": "^4.19.0"
+  }
+}
