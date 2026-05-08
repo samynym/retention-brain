@@ -2,7 +2,29 @@
 
 A continuous, cross-source, per-user retention agent for subscription apps.
 
-**Status:** in development. See [`SPEC.md`](./SPEC.md) and [`PLAN.md`](./PLAN.md).
+## Install in 3 minutes
+
+```sh
+npx rc-retention-brain init       # interactive prompts; writes .env
+npx rc-retention-brain seed-sandbox --train-days 30 --eval-days 30
+npx rc-retention-brain run        # writes briefing-<date>.md
+```
+
+That gives you a real briefing on real-API sandbox data. To validate the brain's predictions against actual outcomes:
+
+```sh
+npx rc-retention-brain reveal-future
+```
+
+## What it does
+
+Reads subscription state, payment health, errors, and usage from up to 4 sources (RevenueCat, Stripe, Sentry, PostHog), scores each user's churn risk, and writes a markdown briefing with personalized retention plays per at-risk user. Briefing-only — it does not send anything to your customers.
+
+The brain looks at each user's full timeline across sources and asks: payment trouble, support friction, usage decline, or recent errors? Each at-risk user gets a per-user explanation grounded in their actual events, plus an LLM-drafted intervention (channel, offer, timing, copy) when `ANTHROPIC_API_KEY` is set.
+
+A sample briefing lives at [`examples/briefing-sample.md`](./examples/briefing-sample.md).
+
+For the full spec see [`SPEC.md`](./SPEC.md) and [`PRODUCT.md`](./PRODUCT.md).
 
 ## Sources
 
@@ -139,4 +161,6 @@ The temporal-holdout commands (`seed-sandbox` + `reveal-future`) push synthetic 
 
 `seed-sandbox` defaults to `--reset`, which deletes prior `rcrb_seed_*` test clocks (cascades to attached customers) and any leftover seed customers. Pass `--no-reset` to layer on top of an existing seed.
 
-MIT License.
+## License
+
+MIT

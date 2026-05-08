@@ -3,6 +3,7 @@
 import { Command } from "commander";
 import { runDemo } from "./commands/demo.js";
 import { runEval } from "./commands/eval.js";
+import { runInit } from "./commands/init.js";
 import { runRun } from "./commands/run.js";
 import { runSeedSandbox, SEED_SANDBOX_DEFAULTS } from "./commands/seed-sandbox.js";
 import { runRevealFuture } from "./commands/reveal-future.js";
@@ -12,6 +13,11 @@ program
   .name("rc-retention-brain")
   .description("Per-user, cross-source retention agent for subscription apps")
   .version("0.0.1");
+
+program
+  .command("init")
+  .description("Interactive setup — prompts for env keys and writes .env")
+  .action(runInit);
 
 program
   .command("demo")
