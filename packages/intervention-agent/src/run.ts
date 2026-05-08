@@ -6,16 +6,25 @@ import { decideTiming } from "./decide-timing.js";
 import { compose } from "./compose.js";
 import { critique } from "./critic.js";
 
+const PLACEHOLDER_LIFT: Intervention["predicted_lift"] = {
+  direction: "positive",
+  confidence: "low",
+  note: "directional only — no historical baseline",
+};
+
 export async function generateIntervention(
   risk: RiskScore,
   timeline: UserTimeline
 ): Promise<Intervention | null> {
   try {
-    const channelDecision = await decideChannel(risk, timeline);
+    const channelDecision = await decideChannel(risk);
     if (channelDecision.channel === "no_op") return null;
 
-    const offerDecision = await decideOffer(risk, channelDecision.channel);
-    const timingDecision = await decideTiming(risk, channelDecision.channel);
+    // offer and timing are independent — run in parallel to save a round-trip
+    const [offerDecision, timingDecision] = await Promise.all([
+      decideOffer(risk, channelDecision.channel),
+      decideTiming(risk, channelDecision.channel),
+    ]);
     const copy = await compose({
       risk,
       channel: channelDecision.channel,
@@ -40,14 +49,9 @@ export async function generateIntervention(
       timing: timingDecision.timing,
       copy,
       reasoning,
-      predicted_lift: {
-        direction: "positive",
-        confidence: "low",
-        note: "directional only — no historical baseline",
-      },
+      predicted_lift: PLACEHOLDER_LIFT,
     };
 
-    // Critique runs to surface quality concerns; we log on warn/reject but don't gate.
     try {
       const review = await critique(intervention);
       if (review.recommendation !== "accept") {

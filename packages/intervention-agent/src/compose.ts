@@ -1,9 +1,10 @@
 import { generateObject } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
-import type { Channel } from "@rcrb/core";
+import { MODEL_ID, type Channel } from "@rcrb/core";
 import type { RiskScore } from "@rcrb/risk-engine";
 import type { OfferDecision } from "./decide-offer.js";
+import { formatTopSignals } from "./prompts.js";
 
 const Schema = z.object({
   subject: z.string().max(80).optional(),
@@ -12,7 +13,13 @@ const Schema = z.object({
 
 export type ComposedCopy = z.infer<typeof Schema>;
 
-const MODEL_ID = "claude-sonnet-4-6";
+const CHANNEL_RULES: Record<Channel, string> = {
+  email: "Email: subject ≤80 chars, body warm and specific.",
+  push: "Push: ≤80 chars body, no subject. Concise and human.",
+  in_app: "In-app: short, conversational, fits in a small surface.",
+  dunning_fix: "Dunning fix: clear about the payment issue and how to resolve it.",
+  no_op: "",
+};
 
 export async function compose(args: {
   risk: RiskScore;
@@ -21,23 +28,13 @@ export async function compose(args: {
   user_email?: string;
 }): Promise<ComposedCopy> {
   const { risk, channel, offer, user_email } = args;
-  const topReasons = risk.top_signals
-    .map((s) => `- ${s.name}: ${s.reason}`)
-    .join("\n");
 
   const offerLine =
     offer.kind === "none"
       ? "No offer — focus on understanding, help, or value reminder."
       : `Offer: ${offer.kind}${offer.value !== undefined ? ` value=${offer.value}` : ""} (${offer.reason})`;
 
-  const channelRules =
-    channel === "push"
-      ? "Push: ≤80 chars body, no subject. Concise and human."
-      : channel === "in_app"
-        ? "In-app: short, conversational, fits in a small surface."
-        : channel === "dunning_fix"
-          ? "Dunning fix: clear about the payment issue and how to resolve it."
-          : "Email: subject ≤80 chars, body warm and specific.";
+  const wantsSubject = channel === "email" || channel === "dunning_fix";
 
   const { object } = await generateObject({
     model: anthropic(MODEL_ID),
@@ -52,9 +49,9 @@ export async function compose(args: {
       `Channel: ${channel}\n` +
       `${offerLine}\n` +
       `Narrative: ${risk.narrative}\n` +
-      `Top signals:\n${topReasons}\n\n` +
-      `${channelRules}\n` +
-      `Write the copy now. ${channel === "email" || channel === "dunning_fix" ? "Include a subject." : "Omit subject."}`,
+      `Top signals:\n${formatTopSignals(risk)}\n\n` +
+      `${CHANNEL_RULES[channel]}\n` +
+      `Write the copy now. ${wantsSubject ? "Include a subject." : "Omit subject."}`,
   });
   return object;
 }
