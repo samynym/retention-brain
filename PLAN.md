@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship v1 of rc-retention-brain — a continuous, cross-source, per-user retention agent with 7 sources (RC, Stripe, Mixpanel, Sentry, Crisp, PostHog, Firebase) and Resend action channel — installable on a real RC sandbox in <10 min.
+**Goal:** Ship v1 of rc-retention-brain — a continuous, cross-source, per-user retention agent with 4 sources (RC, Stripe, Sentry, PostHog) — installable on real sandboxes in <10 min and producing a markdown briefing. v1 is briefing-only; `--send` and the rest of the source roadmap come in v1.x.
 
 **Architecture:** TypeScript monorepo. Source-agnostic core (normalized `Event` + `Intervention` types). Pluggable `Source` and `Channel` interfaces. Risk engine = heuristic signals + LLM-judge over per-user timeline. Intervention agent = specialist sub-agents (channel/offer/timing/copy) with critic pass. Eval harness uses synthetic ground truth + LLM-as-judge.
 
@@ -18,17 +18,18 @@ Each phase = roughly one focused Claude session (1-3 agent-hours). Each phase en
 
 | # | Phase | Output |
 |---|---|---|
-| 0 | Bootstrap | Workspace, configs, CI skeleton, first commit |
-| 1 | Core types + synthetic source | `Event`, `Intervention`, `Source` interface, simulator with 7 personas, ground truth |
-| 2 | Risk engine | Signals + LLM judge + combined score, validated on synthetic ground truth |
-| 3 | Intervention agent | Sub-agent pipeline, structured `Intervention` output |
-| 4 | Eval harness | Prediction + intervention evals, LLM-as-judge rubric, markdown report |
-| 5 | CLI + `demo` command | `npx rc-retention-brain demo` works end-to-end on synthetic data |
-| 6 | 7 source connectors | One CC session per connector (RC, Stripe, Mixpanel, Sentry, Crisp, PostHog, Firebase) |
-| 7 | Resend channel | Email send with `--dry-run` default, `--send` opt-in |
-| 8 | Install polish + DM | `init`, `--watch`, README, end-to-end real-data smoke, DM drafted |
+| 0 ✅ | Bootstrap | Workspace, configs, CI skeleton, first commit |
+| 1 ✅ | Core types + synthetic source | `Event`, `Intervention`, `Source` interface, simulator with 7 personas, ground truth |
+| 2 ✅ | Risk engine | Signals + LLM judge + combined score, validated on synthetic ground truth |
+| 3 ✅ | Intervention agent | Sub-agent pipeline, structured `Intervention` output |
+| 4 ✅ | Eval harness | Prediction + intervention evals, LLM-as-judge rubric, markdown report |
+| 5 ✅ | CLI + `demo` command | `npx rc-retention-brain demo` works end-to-end on synthetic data |
+| **5.5** | **Eval methodology fixes** | **Adversarial personas, seed split, pre-registered thresholds, non-self-judging critic** |
+| 6 | 4 source connectors | RC, Stripe, Sentry, PostHog — pluggable, ≥1 of {RC, Stripe} required |
+| 7 | Briefing renderer + seed-sandbox | `run` writes briefing markdown; `seed-sandbox` populates RC/Stripe/Sentry/PostHog with realistic users |
+| 8 | Install polish + DM | `init`, `--watch`, README install-first, screen recording, DM drafted |
 
-**v0 = end of Phase 5.** **v1.0 = end of Phase 8.**
+**v0 ✅ = end of Phase 5.** **v1.0 = end of Phase 8.** Resend channel + `--send` deferred to v1.1.
 
 ---
 
@@ -1835,9 +1836,76 @@ git tag v0.1.0
 
 ---
 
-## Phase 6: Source connectors (× 7)
+## Phase 5.5: Eval methodology fixes
 
-**Goal:** Each connector implements the `Source` interface, maps real provider events to the normalized `Event` schema, includes a smoke test against a sandbox account, and updates README.
+**Goal:** Make the eval suite trustworthy enough that v1's quality numbers survive a senior engineer's scrutiny. Driven by the post-v0 debate findings (Miguel + Jacob).
+
+**What's broken today:**
+- `score.test.ts:32` picks the threshold at the 50th-percentile of churner scores → privileged access to ground truth
+- Same seed used for tuning weights and reporting numbers → no held-out evaluation
+- `critic.ts` and `eval/intervention.ts` both use Sonnet → Sonnet judges Sonnet's output (closed loop)
+- `llm-judge.ts` silently substitutes `narrative_risk = 0` on error → biases scores down without surfacing
+- Synthetic personas encode the patterns the heuristics look for → tautological by design
+- Critic verdict is logged to `console.warn` and discarded → eval can't correlate accept-rate with downstream signals
+
+**Tasks:**
+
+- [ ] **Add adversarial personas to simulator**
+
+`packages/sources/src/synthetic/personas/{re_engager,crashy_loyal,silent_lurker}.ts`:
+- `re_engager`: looks lapsing for 2 weeks, then activity rebounds in last 5 days. Should NOT score high. Trip wire for false positives.
+- `crashy_loyal`: high crash rate but stable usage and payments. Should NOT score high. Trip wire for over-weighting `error_rate`.
+- `silent_lurker`: pays consistently, very low usage, never churns. Should NOT score high purely on usage decline.
+
+Each gets weight 0.05 (adds 15% adversarial users). Update `personas/index.ts`. The simulator already supports the `Persona` shape — add the new files following the existing pattern.
+
+- [ ] **Pre-register thresholds in tests**
+
+Replace `score.test.ts:32` median-of-churners trick with explicit thresholds. Test asserts precision/recall at thresholds {0.4, 0.5, 0.6} and reports all three. Pre-registers a target set: at threshold 0.5, expect recall ≥ 0.4 AND precision ≥ 0.65 (tunable; both bars must hit).
+
+- [ ] **Train/eval seed split**
+
+Define two seed sets: `TRAIN_SEEDS = ["risk-test", "trend-test", ...]` (used during signal-weight tuning) and `EVAL_SEEDS = ["eval-pred", "eval-fixed-1", "eval-fixed-2"]` (used in CI assertions). Document that weight tuning may NOT use eval seeds. Add a comment block to `score.ts` listing the eval-seed contract.
+
+- [ ] **Surface critic verdict on Intervention**
+
+Update `Intervention` type in `@rcrb/core` to add `critique?: { scores, recommendation, notes }`. Update `intervention-agent/src/run.ts` to attach the critic result rather than only logging it. Eval can then correlate critic accept-rate with risk score / persona / signals.
+
+- [ ] **Track LLM judge availability explicitly**
+
+Update `RiskScore` type to add `llm_judge_available: boolean`. When `llm-judge.ts` falls back to score 0 on error, set `llm_judge_available = false` so the eval can split metrics by "with LLM" vs "without." Don't silently substitute zero into the combined score — instead, when unavailable, scale the heuristic weight to 1.0 so the user isn't penalized by a transient failure.
+
+- [ ] **Use a different model for critic in eval mode**
+
+The intervention-agent's `critique()` is used both at generation time (gate-check) and in eval. For eval, swap to `claude-opus-4-7` (or any model ≠ the composer's Sonnet 4.6) to break the closed loop. Add an optional `model` parameter to `critique()`; default stays Sonnet 4.6. `evalInterventions` passes Opus.
+
+- [ ] **Update prediction.test.ts**
+
+Test now asserts: at threshold 0.5, precision ≥ 0.65, recall ≥ 0.4. At threshold 0.4, precision ≥ 0.5, recall ≥ 0.55. Both bars must hold. Change seed to `eval-fixed-1` (an eval seed, not a tuning seed).
+
+- [ ] **Run all evals end-to-end**
+
+`pnpm test` should still pass. `pnpm exec tsx scripts/inspect.ts` (extended to dump per-persona scores including new adversarial ones) should show:
+- `re_engager` users average score < 0.4 (NOT flagged)
+- `crashy_loyal` users average score < 0.4 (NOT flagged)
+- `silent_lurker` users average score < 0.4 (NOT flagged)
+- `lapsing` and `wavering` (true churners) still ≥ 0.6
+
+If adversarial personas push current weights below the bar, signal weights need re-tuning (using train seeds only).
+
+- [ ] **Commit Phase 5.5**
+
+```bash
+git commit -m "feat(eval): adversarial personas, seed split, pre-registered thresholds, non-self-judging critic"
+```
+
+---
+
+## Phase 6: 4 source connectors (RC, Stripe, Sentry, PostHog)
+
+**Goal:** Each connector implements the `Source` interface, maps real provider events to the normalized `Event` schema, includes a smoke test against a sandbox, and updates README.
+
+**Constraint:** at runtime, ≥1 of {RevenueCat, Stripe} must be configured. Sentry + PostHog are pure-optional. CLI prints a clear error if no subscription source is wired.
 
 **Common pattern (per connector):**
 1. Add package `packages/sources-<name>/`
@@ -1848,7 +1916,7 @@ git tag v0.1.0
 6. Smoke test (skipped if env keys absent)
 7. README section showing how to wire it up
 
-Each connector is its own CC session. Order is not critical, but **suggested order** below — it front-loads the most-impactful and well-documented APIs.
+Each connector is its own CC session. Order: RC first (the named anchor), then Stripe (web subs), then Sentry (novel angle, easy API), then PostHog (analytics, fills the usage signal).
 
 ### 6.1 RevenueCat
 
@@ -1900,25 +1968,7 @@ User matching: use `customer.email`. Fall back to `customer.metadata.app_user_id
 
 **Smoke test:** if `STRIPE_API_KEY` set (test mode), list customers, expect to be able to enumerate.
 
-### 6.3 Mixpanel
-
-**Files:** `packages/sources-mixpanel/{...}`
-
-**Auth:** project ID + API secret (`MIXPANEL_PROJECT_ID`, `MIXPANEL_API_SECRET`). Reference: https://developer.mixpanel.com/reference/raw-event-export
-
-**Endpoints used:**
-- `GET https://data.mixpanel.com/api/2.0/export` (raw event export, JSONL stream)
-- `GET https://mixpanel.com/api/2.0/engage` for user profiles (matching)
-
-**Events to map:**
-- Any event with `event` name → `usage.feature` (with payload.feature = event name)
-- Pseudo-event "session" derived from session_start property if present, else from time-window heuristic
-
-User matching: Mixpanel's `distinct_id` ≠ our `user_id`. Use `$email` property from Engage. Match by email.
-
-**Smoke test:** export 1 day of events from project, expect ≥0 events.
-
-### 6.4 Sentry
+### 6.3 Sentry
 
 **Files:** `packages/sources-sentry/{...}`
 
@@ -1936,29 +1986,7 @@ User matching: `event.user.email` → primary; fallback to `event.user.id` match
 
 **Smoke test:** fetch first page of issues, expect ≥0 results.
 
-### 6.5 Crisp
-
-**Files:** `packages/sources-crisp/{...}`
-
-**Auth:** identifier + key (`CRISP_IDENTIFIER`, `CRISP_KEY`), website ID.
-
-**Endpoints used:**
-- `GET /v1/website/{website_id}/conversations/{page}` — list conversations
-- `GET /v1/website/{website_id}/conversation/{session_id}/messages` — message details
-- `GET /v1/website/{website_id}/people/profile/{people_id}` — user matching
-
-**Events to map:**
-- Conversation opened → `support.ticket_open`
-- Each user message → `support.ticket_message` (with payload.text + LLM-derived sentiment if message length >20 chars)
-- Conversation resolved → `support.ticket_close`
-
-User matching: profile email.
-
-**Sentiment derivation:** for each message, call Sonnet 4.6 with `Score this customer message sentiment: positive/neutral/negative. Reply with one word.` Cache by message content hash.
-
-**Smoke test:** list conversations, expect ≥0 results.
-
-### 6.6 PostHog
+### 6.4 PostHog
 
 **Files:** `packages/sources-posthog/{...}`
 
@@ -1977,31 +2005,11 @@ User matching: `person.properties.email`.
 
 **Smoke test:** fetch first page of events, expect ≥0 results.
 
-### 6.7 Firebase Analytics + Crashlytics
-
-**Files:** `packages/sources-firebase/{...}`
-
-**Auth:** GCP service account key (`GOOGLE_APPLICATION_CREDENTIALS` path), project ID, BigQuery dataset (`FIREBASE_BIGQUERY_DATASET`).
-
-**Approach:** BigQuery is the canonical export path for both. Use `@google-cloud/bigquery`.
-
-**Queries used:**
-- Analytics: `SELECT user_id, event_name, event_timestamp, event_params FROM \`{dataset}.events_*\` WHERE _TABLE_SUFFIX BETWEEN '<since>' AND '<until>'`
-- Crashlytics: `SELECT user_id, event_timestamp, exception_type FROM \`{dataset}.crashlytics_events\``
-
-**Events to map:**
-- Analytics events → `usage.feature` (with payload.feature = event_name)
-- Crashlytics events → `error.crash` (with payload.exception_type)
-
-User matching: BigQuery `user_id` field. Caveat: only available if Firebase user_id is populated by the app — otherwise fall back to user_pseudo_id (won't cross-match).
-
-**Smoke test:** run a 1-day query, expect ≥0 rows.
-
 ---
 
-### Tasks (per connector)
+### Tasks (per connector — 4 sessions)
 
-For each of the 7 connectors above, in its own session:
+For each connector (RC, Stripe, Sentry, PostHog), in its own session:
 
 - [ ] Create `packages/sources-<name>/{package.json,tsconfig.json,src/index.ts,src/api.ts,src/map.ts}`
 - [ ] Implement REST/SDK client with auth
@@ -2013,152 +2021,118 @@ For each of the 7 connectors above, in its own session:
 - [ ] Update root README with one-line wiring example
 - [ ] Commit `feat(sources-<name>): connector + smoke test`
 
+After all 4 connectors: add a top-level `packages/cli/src/commands/run.ts` that wires the configured sources together, builds timelines, scores, and generates interventions. Enforce ≥1 of {RC, Stripe} at startup with a clear error message.
+
 ---
 
-## Phase 7: Resend channel + send/dry-run
+## Phase 7: Briefing renderer + seed-sandbox
 
-**Goal:** Real email send via Resend, with `--dry-run` default and `--send` opt-in.
+**Goal:** Two pieces that close the v1 user journey — the briefing the user actually reads, and the seed script that fills sandboxes with realistic users so the install can be validated end-to-end.
 
 **Files:**
-- Create: `packages/channels/package.json`, `tsconfig.json`
-- Create: `packages/channels/src/{channel,dry-run}.ts`
-- Create: `packages/channels-resend/{package.json,tsconfig.json,src/index.ts,src/index.test.ts}`
+- Create: `packages/cli/src/commands/run.ts` (or extend it from Phase 6) — produces a markdown briefing
+- Create: `packages/cli/src/commands/watch.ts` — `--watch` mode polling sources every 60s
+- Create: `packages/cli/src/commands/seed-sandbox.ts` — populates RC + Stripe + (optional) Sentry + PostHog with ~50 realistic users
+- Create: `packages/sources/src/synthetic/seed-real-sandbox.ts` — translates the synthetic generator into real-API calls
+- Update: `examples/briefing-sample.md` — committed canonical briefing example
+
+### Briefing renderer
+
+`run` command writes `briefing-<YYYY-MM-DD>.md` to the working directory. Format:
+
+```markdown
+# Retention Briefing — 2026-05-08
+
+**Account summary:** 1,247 subscribers · 73 flagged at risk · top driver: usage_decline (42)
+
+## Top 5 at-risk users — recommended interventions
+
+### 1. user_alice@example.com — risk 0.91
+**Why flagged**
+- usage_decline: sessions down 78% in last 7 days
+- engagement_recency: last session 9 days ago
+- error_rate: 4 crashes in last 14 days (export PDF feature)
+
+**Recommended play**
+- Channel: email
+- Offer: 50% off first month
+- Timing: within 24 hours
+- Critic verdict: accept (4.2/5)
+
+**Draft subject:** "Sorry the export crashed — let's make it right"
+**Draft body:** [...]
+
+[Evidence (collapsible)]
+- 2026-04-29 14:31 · usage.session
+- 2026-04-30 09:02 · error.crash · type=PDFExportError
+- ...
+```
+
+Every intervention includes the **evidence block** — raw events that produced the signals (David's "or I won't trust the email" critique).
+
+### `seed-sandbox` script
+
+Takes RC API key (+ Stripe test key + optional Sentry token + optional PostHog key), creates ~50 subscribers across the canonical persona shapes:
+
+- ~30 loyal/power users (no churn signal)
+- ~10 wavering users (declining usage in real time)
+- ~7 lapsing users (cratering activity)
+- ~3 free-rider users (payment failures via Stripe test mode)
+- (If Sentry token) throw realistic errors via Sentry SDK tied to specific user IDs
+- (If PostHog key) capture realistic event sequences via PostHog SDK
+
+Idempotent — re-runs delete previous seeded users (identified by `app_user_id` prefix `seed_`) and recreate. Documented as the canonical way to validate install before showing to others.
 
 ### Tasks
 
-- [ ] **Scaffold `packages/channels`** with the `Channel` interface
+- [ ] Implement `run.ts` command — reads `.env`, instantiates configured sources, builds timelines, scores, generates interventions, writes briefing markdown
+- [ ] Implement evidence-block rendering on each intervention
+- [ ] Implement `watch.ts` — polls non-webhook sources every 60s, sets up webhook listeners for sources that support them, prints events as they arrive
+- [ ] Implement `seed-sandbox.ts` — creates users in RC + Stripe + (Sentry + PostHog if keys), documents how to clean up
+- [ ] Commit `feat(cli): briefing renderer + seed-sandbox` and an example briefing in `examples/`
 
-```ts
-import { Intervention } from "@rcrb/core";
-
-export interface Channel {
-  name: string;
-  send(intervention: Intervention, opts: { user_email: string; dry_run: boolean }): Promise<{ ok: boolean; id?: string; error?: string }>;
-}
-```
-
-- [ ] **Implement dry-run channel** — writes to `./interventions/<user_id>-<timestamp>.json`
-
-```ts
-import fs from "node:fs/promises";
-import path from "node:path";
-import { Channel } from "./channel.js";
-
-export const dryRunChannel: Channel = {
-  name: "dry_run",
-  async send(intervention, opts) {
-    const dir = path.resolve("./interventions");
-    await fs.mkdir(dir, { recursive: true });
-    const file = path.join(dir, `${intervention.user_id}-${Date.now()}.json`);
-    await fs.writeFile(file, JSON.stringify({ ...intervention, _dry_run: true, _to: opts.user_email }, null, 2));
-    return { ok: true, id: file };
-  },
-};
-```
-
-- [ ] **Scaffold `packages/channels-resend`** with deps `resend`
-
-- [ ] **Implement Resend channel**
-
-```ts
-import { Resend } from "resend";
-import { Channel } from "@rcrb/channels";
-
-export function resendChannel(apiKey: string, fromEmail: string): Channel {
-  const resend = new Resend(apiKey);
-  return {
-    name: "resend",
-    async send(intervention, opts) {
-      if (opts.dry_run) {
-        return { ok: true, id: "(dry-run)" };
-      }
-      if (intervention.channel !== "email") {
-        return { ok: false, error: `Resend only supports email channel; got ${intervention.channel}` };
-      }
-      const r = await resend.emails.send({
-        from: fromEmail,
-        to: opts.user_email,
-        subject: intervention.copy.subject ?? "Quick check-in",
-        text: intervention.copy.body,
-      });
-      if (r.error) return { ok: false, error: r.error.message };
-      return { ok: true, id: r.data?.id };
-    },
-  };
-}
-```
-
-- [ ] **Smoke test** (skipped if no key, also ensures dry-run path)
-
-```ts
-import { describe, it, expect } from "vitest";
-import { dryRunChannel } from "@rcrb/channels";
-
-describe("dryRunChannel", () => {
-  it("writes intervention to disk", async () => {
-    const r = await dryRunChannel.send({
-      user_id: "u_test", risk_score: 0.8, channel: "email",
-      offer: { kind: "discount_percent", value: 20 },
-      timing: "immediate",
-      copy: { subject: "Stay with us", body: "Hey, want to come back?" },
-      reasoning: "test", predicted_lift: { direction: "positive", confidence: "low", note: "" },
-    }, { user_email: "test@example.com", dry_run: true });
-    expect(r.ok).toBe(true);
-  });
-});
-```
-
-- [ ] **Wire `--send` into CLI run command** (Phase 8 will add the `run` command properly).
-
-- [ ] **Commit** `feat(channels): dry-run + Resend channel`
+**Resend channel + `--send` deferred to v1.1.** v1 ships briefing-only — installing v1 cannot, by design, send anything to your customers. This collapses the trust ask: the user reads briefings, edits the ones they don't like, manually copies into their existing email tool. Once that flow has been used for a month and trusted, v1.1 adds Resend dispatch with explicit `--send` opt-in.
 
 ---
 
 ## Phase 8: Install polish + DM-readiness
 
-**Goal:** Clone → first useful output on a real RC + Stripe sandbox in <10 min. README install-first. `--watch` mode. End-to-end smoke. DM drafted.
+**Goal:** Clone → first useful output on a real RC + Stripe + Sentry + PostHog sandbox in <10 min, validated via screen recording. README install-first with a real briefing front and center. End-to-end smoke. DM drafted.
 
 **Files:**
-- Modify: `README.md` (rewrite install-first)
-- Create: `packages/cli/src/commands/{init,run,watch}.ts`
+- Modify: `README.md` (rewrite install-first; the README IS the artifact)
+- Create: `packages/cli/src/commands/init.ts`
 - Create: `docs/{architecture,extending,roadmap}.md`
-- Create: `examples/briefing-sample.md`
+- Update: `examples/briefing-sample.md` (committed canonical briefing from a seeded sandbox)
 
 ### Tasks
 
-- [ ] **Implement `init` command** — interactive prompts (use `@inquirer/prompts`) for each key, write `.env`
+- [ ] **Implement `init` command** — interactive prompts (use `@inquirer/prompts`) for each key, write `.env`. Asks for at least one of {RC, Stripe} and prints a clear error if neither provided. Sentry + PostHog optional.
 
-- [ ] **Implement `run` command** — given `.env`, instantiate enabled sources, pull events, score, generate, write briefing markdown to `./briefing-<date>.md`
+- [ ] **Write `docs/architecture.md`** — diagram of source → timeline → risk → intervention → briefing, link to spec
 
-- [ ] **Implement `watch` command** — sets up webhook listeners + polls non-webhook sources every 60s, prints events as they arrive, scores incrementally
+- [ ] **Write `docs/extending.md`** — concrete walkthrough of "add a new source in 30 min" using one of the 4 connectors as template
 
-- [ ] **Write `docs/architecture.md`** — diagram of source → timeline → risk → intervention → channel, link to spec
-
-- [ ] **Write `docs/extending.md`** — concrete walkthrough of "add a new source in 30 min" using one of the 7 connectors as template
-
-- [ ] **Rewrite `README.md`**
+- [ ] **Rewrite `README.md`** so it stands alone as the artifact
 
 Structure:
 ```
 # rc-retention-brain
 
-[1-paragraph install + first-output flow]
+[Real briefing screenshot embedded here — top of file, before any prose]
 
-## Why this exists
-
-[2-paragraph thesis: Rico is the analyst; this is the operator]
+## Install in 3 minutes
+1. npx rc-retention-brain init  (paste keys; ≥1 of {RC, Stripe} required)
+2. npx rc-retention-brain seed-sandbox  (populates sandboxes with realistic users)
+3. npx rc-retention-brain run  (writes briefing-<date>.md)
 
 ## What it does
 
-[bullet list of demo + run + watch modes]
-
-## Install
-
-[npx ... init steps with the actual interactive flow]
+[Per-user, cross-source, decision-oriented retention agent. Sentence on the four-source thesis.]
 
 ## Sources
 
-[table of 7 sources with status, signal type, auth requirement]
+[Table of 4 supported sources with status, signal type, auth requirement, and link to extending.md]
 
 ## Architecture
 
@@ -2177,15 +2151,16 @@ Structure:
 MIT
 ```
 
-- [ ] **End-to-end smoke on real sandbox**
+- [ ] **End-to-end smoke on real sandbox + screen recording**
 
-User runs:
-1. RC sandbox account: create, get API key + project ID
-2. Stripe test-mode account: get secret key, create a few test customers + subscriptions
-3. (Optional) Sentry, Mixpanel, Crisp, PostHog, Firebase test accounts
-4. `npx rc-retention-brain init` — paste keys
-5. `npx rc-retention-brain run` — generate first briefing
-6. Verify briefing has real users, real signals, plausible interventions
+The recording is what gates the DM. If install takes >10 min, fix install before fixing anything else.
+
+1. Create RC sandbox account, Stripe test-mode account
+2. (Optional) Sentry free-tier project, PostHog free-tier project
+3. From a clean machine: `git clone`, `pnpm install`, `npx rc-retention-brain init`
+4. Paste keys, run `seed-sandbox`, run `run`
+5. Inspect the briefing — does it have real users, real signals, plausible interventions, evidence blocks?
+6. Record the entire flow once it's clean. Embed a still + GIF in the README.
 
 - [ ] **Final eval run + commit**
 
@@ -2198,16 +2173,17 @@ git tag v1.0.0
 
 - [ ] **Draft DM** in `docs/DM-DRAFT.md` (NOT committed publicly until final)
 
-Two-beat structure per `SPEC.md` DM section. Sleep on it, edit, send.
+Per `SPEC.md` DM section. Sleep on it, edit, send.
 
 ---
 
-## Self-review notes (post-write)
+## Self-review notes (post-debate revision, 2026-05-08)
 
-- ✅ All 7 sources have a defined task (Phase 6.1 through 6.7) with concrete API endpoints + event mappings
-- ✅ Each phase has acceptance criteria and a commit at the end
-- ✅ No placeholders — every code block is concrete
-- ✅ Type consistency: `Event`, `Intervention`, `Channel`, `OfferKind` defined once in `@rcrb/core`, referenced by all
-- ⚠️ Quality bars (75% precision @ 50% recall, ≥4/5 LLM-judge) are aspirational — may need to tune signal weights in Phase 2 to hit them. Plan accommodates this with explicit tuning step in Phase 2 acceptance.
-- ⚠️ Phase 6 connector tasks are templated, not exhaustively step-by-step — appropriate for autonomous CC execution where each connector is one session
+- ✅ Phase 5.5 added — fixes eval methodology (adversarial personas, seed split, pre-registered thresholds, non-self-judging critic)
+- ✅ Phase 6 cut to 4 connectors (RC, Stripe, Sentry, PostHog) instead of 7. RC mandatory dropped — ≥1 of {RC, Stripe} required at runtime
+- ✅ Phase 7 reframed: briefing renderer + seed-sandbox script. Resend channel deferred to v1.1
+- ✅ Phase 8 updated: README is the artifact, screen recording gates the DM
+- ✅ Type consistency: `Event`, `Intervention`, `Channel`, `OfferKind`, `MODEL_ID` defined once in `@rcrb/core`
+- ⚠️ Quality bars after Phase 5.5 will likely shift down (adversarial personas reduce baseline precision). That's OK — the new bars are more honest. Real numbers will land during 5.5 implementation.
+- ⚠️ Phase 6 connector tasks are templated; appropriate for autonomous CC execution where each connector is one session
 - ⚠️ Phase 8 `init` interactive flow uses `@inquirer/prompts` — task assumes Claude will pick a sensible structure since the dependency choice is locked but the prompts list is the install-time concern

@@ -65,17 +65,17 @@ To send all: rc-retention-brain run --send
 
 You read the briefings, edit the ones you don't like, run `--send` on the rest. Done.
 
-## What makes it different from RevenueCat's Rico
+## What makes it different from existing tooling
 
-Rico (RC's own AI agent, shipped Q2 2026) is the **analyst**. You ask it questions, it gives smart answers about your account.
+Subscription dashboards tell you what already happened. Retention agents decide what to do — per individual user, in real time, before they cancel.
 
-This is the **operator**. It's:
-- **Continuous** (Rico is on-demand)
-- **Per-user** (Rico is aggregate cohorts)
-- **Action-oriented** (Rico recommends, doesn't act)
-- **Cross-source** (Rico sees only RC data)
+The brain is:
+- **Per-user**, not aggregate cohorts
+- **Continuous**, not on-demand queries
+- **Cross-source** — it joins subscription state, payment health, errors, and usage signal that today live in 4 different tabs
+- **Decision-oriented** — generates structured plays (channel, offer, timing, copy), not just metrics
 
-It complements Rico. Doesn't compete.
+The integrations are pluggable, so it works alongside whatever stack you already have.
 
 ## What it explicitly is NOT
 
