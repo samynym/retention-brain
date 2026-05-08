@@ -1,0 +1,19 @@
+{
+  "name": "@rcrb/eval",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@rcrb/core": "workspace:*",
+    "@rcrb/sources": "workspace:*",
+    "@rcrb/risk-engine": "workspace:*",
+    "@rcrb/intervention-agent": "workspace:*"
+  }
+}
