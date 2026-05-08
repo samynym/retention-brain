@@ -17,11 +17,7 @@ export type LlmJudgeResult = z.infer<typeof JudgeSchema>;
 const MODEL_ID = "claude-sonnet-4-6";
 const MAX_EVENTS = 30;
 
-/**
- * Compact a user's timeline (last 30 events) into a short string and ask the
- * LLM for { narrative_risk, reason }. Errors are handled gracefully (returns
- * score 0 + the error reason) so callers never throw.
- */
+// Returns { narrative_risk, reason } from the LLM, or a zero-risk fallback on error.
 export async function llmJudge(timeline: UserTimeline): Promise<LlmJudgeResult> {
   try {
     const recent = timeline.events.slice(-MAX_EVENTS);

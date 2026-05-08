@@ -79,11 +79,10 @@ export async function scoreAll(
   const nowIso = opts.nowIso ?? deriveBatchNow(timelines);
   const effectiveOpts: ScoreOpts = { ...opts, nowIso };
 
-  // Without LLM there is no I/O — just map synchronously fast.
   if (!useLLM) {
     return Promise.all(timelines.map((t) => scoreUser(t, effectiveOpts)));
   }
-  // With LLM, chunk by 5 to avoid rate limits.
+  // chunk by 5 to avoid LLM rate limits
   const concurrency = 5;
   const out: RiskScore[] = [];
   for (let i = 0; i < timelines.length; i += concurrency) {
@@ -111,9 +110,7 @@ function clamp01(x: number): number {
 }
 
 function synthesizeNarrative(topSignals: Signal[]): string {
-  const drivers = topSignals.filter((s) => s.score > 0);
-  if (drivers.length === 0) {
-    return "No notable risk signals detected.";
-  }
-  return drivers.map((s) => s.reason).join(" ");
+  const drivers = topSignals.filter((s) => s.score > 0).map((s) => s.name);
+  if (drivers.length === 0) return "No notable risk signals detected.";
+  return `Top drivers: ${drivers.join(", ")}.`;
 }

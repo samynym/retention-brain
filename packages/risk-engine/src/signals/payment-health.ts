@@ -3,11 +3,6 @@ import type { Signal } from "./types.js";
 
 const DAY_MS = 86_400_000;
 
-/**
- * Look at most recent payment event in last 14 days.
- * Failure with no subsequent success → score 0.9.
- * Otherwise score 0.
- */
 export function paymentHealth(timeline: UserTimeline, nowIso?: string): Signal {
   if (timeline.events.length === 0) {
     return {
@@ -21,8 +16,7 @@ export function paymentHealth(timeline: UserTimeline, nowIso?: string): Signal {
   const nowMs = new Date(nowIso ?? lastEvent.timestamp).getTime();
   const cutoff = nowMs - 14 * DAY_MS;
 
-  // Iterate events — payment-related events only, in last 14 days.
-  // Timeline is sorted ascending, walk from the end.
+  // timeline is sorted ascending; walk from the end to find the latest events first
   let mostRecentFailure: { timestamp: string } | null = null;
   let mostRecentSuccess: { timestamp: string } | null = null;
   for (let i = timeline.events.length - 1; i >= 0; i--) {
@@ -45,7 +39,6 @@ export function paymentHealth(timeline: UserTimeline, nowIso?: string): Signal {
     };
   }
 
-  // Failure with subsequent success means success.timestamp > failure.timestamp
   if (mostRecentSuccess !== null && mostRecentSuccess.timestamp > mostRecentFailure.timestamp) {
     return {
       name: "payment_health",

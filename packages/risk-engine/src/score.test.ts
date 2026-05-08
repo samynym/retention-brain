@@ -27,6 +27,10 @@ describe("risk engine — heuristic only", () => {
     const scores = await scoreAll(timelines, { useLLM: false });
     const byUser = new Map(scores.map((s) => [s.user_id, s]));
 
+    // Threshold at the score that captures the top 50% of churners. By
+    // construction this is the median churner score — measuring precision at
+    // exactly 50% recall. Threshold is data-dependent on purpose: it shifts
+    // with signal-weight changes, so this asserts the bar holds across tuning.
     const churners = src.ground_truth.filter((g) => g.will_churn);
     const churnerScores = churners.map((g) => byUser.get(g.user_id)!.score).sort((a, b) => b - a);
     const threshold = churnerScores[Math.floor(churners.length * 0.5)]!;
