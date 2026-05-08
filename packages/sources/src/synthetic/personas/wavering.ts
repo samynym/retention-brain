@@ -9,9 +9,9 @@ export const wavering: Persona = {
     payment_failure_rate: 0.04,
     support_ticket_rate: 0.20,
     crash_rate: 0.03,
-    will_churn: true, // 30% of these actually churn (tuned in generate.ts)
+    will_churn: true,
     churn_window_days: 21,
     churn_reason: "usage_decline",
-    sessions_trend: 0.4, // declining — by end of window, sessions are ~40% of start
+    sessions_trend: 0.4,
   },
 };

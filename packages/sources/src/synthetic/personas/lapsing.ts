@@ -8,10 +8,10 @@ export const lapsing: Persona = {
     feature_events_per_session: { mean: 2, sd: 1 },
     payment_failure_rate: 0.05,
     support_ticket_rate: 0.10,
-    crash_rate: 0.15, // high crashes correlated with churn
+    crash_rate: 0.15,
     will_churn: true,
     churn_window_days: 7,
     churn_reason: "usage_decline",
-    sessions_trend: 0.05, // cratering — by end of window, sessions are ~5% of start
+    sessions_trend: 0.05,
   },
 };
