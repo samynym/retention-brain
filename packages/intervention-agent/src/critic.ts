@@ -16,14 +16,18 @@ const CriticSchema = z.object({
 
 export type Critique = z.infer<typeof CriticSchema>;
 
-export async function critique(intervention: Intervention): Promise<Critique> {
+export async function critique(
+  intervention: Intervention,
+  opts: { model?: string } = {}
+): Promise<Critique> {
+  const modelId = opts.model ?? MODEL_ID;
   const offerLine =
     intervention.offer.kind === "none"
       ? "none"
       : `${intervention.offer.kind}${intervention.offer.value !== undefined ? ` value=${intervention.offer.value}` : ""}`;
 
   const { object } = await generateObject({
-    model: anthropic(MODEL_ID),
+    model: anthropic(modelId),
     schema: CriticSchema,
     system:
       "You are a senior retention PM reviewing a generated intervention. " +

@@ -8,13 +8,14 @@ import {
   errorRate,
   type Signal,
 } from "./signals/index.js";
-import { llmJudge } from "./llm-judge.js";
+import { llmJudge, LlmJudgeUnavailableError } from "./llm-judge.js";
 
 export type RiskScore = {
   user_id: string;
   score: number;
   top_signals: Signal[]; // top 3 by score*weight
   narrative: string;
+  llm_judge_available: boolean;
 };
 
 export type ScoreOpts = {
@@ -31,6 +32,14 @@ export type ScoreOpts = {
 const HEURISTIC_WEIGHT = 0.8;
 const LLM_WEIGHT = 0.2;
 
+// Per-signal weights live in each signal file. Phase 5.5 tuned values
+// (informed by the synthetic adversarial-vs-true-churner separation):
+//   usage_decline: 0.35 — strongest discriminator, with absolute-count branch
+//   payment_health: 0.40 — fires only on unrecovered failures, no false positives on adversarial
+//   engagement_recency: 0.35 — captures lapsing pattern; tradeoff: also fires on silent_lurker
+//   error_rate: 0.05 — kept low so crashy_loyal stays cleanly under threshold
+//   support_sentiment: 0.05 — sparse but specific signal
+//   lifecycle_stage: 0.00 — non-discriminating in synthetic data; all users get the same score
 const SIGNAL_FNS = [
   usageDecline,
   paymentHealth,
@@ -53,14 +62,20 @@ export async function scoreUser(
     .slice(0, 3);
 
   let combined = heuristic;
-  let narrative: string;
+  let narrative = synthesizeNarrative(topSignals);
+  let llm_judge_available = false;
 
   if (useLLM) {
-    const judge = await llmJudge(timeline);
-    combined = heuristic * HEURISTIC_WEIGHT + judge.narrative_risk * LLM_WEIGHT;
-    narrative = judge.reason;
-  } else {
-    narrative = synthesizeNarrative(topSignals);
+    try {
+      const judge = await llmJudge(timeline);
+      combined = heuristic * HEURISTIC_WEIGHT + judge.narrative_risk * LLM_WEIGHT;
+      narrative = judge.reason;
+      llm_judge_available = true;
+    } catch (err) {
+      if (!(err instanceof LlmJudgeUnavailableError)) throw err;
+      // heuristic-only when judge unavailable — combined stays at heuristic*1.0, no zero substitution
+      combined = heuristic;
+    }
   }
 
   return {
@@ -68,6 +83,7 @@ export async function scoreUser(
     score: clamp01(combined),
     top_signals: topSignals,
     narrative,
+    llm_judge_available,
   };
 }
 

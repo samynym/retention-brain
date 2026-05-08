@@ -2,13 +2,14 @@ import type { UserTimeline } from "@rcrb/core";
 import type { Signal } from "./types.js";
 
 const DAY_MS = 86_400_000;
+const WEIGHT = 0.05;
 
 export function supportSentiment(timeline: UserTimeline, nowIso?: string): Signal {
   if (timeline.events.length === 0) {
     return {
       name: "support_sentiment",
       score: 0,
-      weight: 0.15,
+      weight: WEIGHT,
       reason: "No events in timeline.",
     };
   }
@@ -33,7 +34,7 @@ export function supportSentiment(timeline: UserTimeline, nowIso?: string): Signa
     return {
       name: "support_sentiment",
       score: 0,
-      weight: 0.15,
+      weight: WEIGHT,
       reason: "No support tickets in the last 14 days.",
     };
   }
@@ -42,7 +43,7 @@ export function supportSentiment(timeline: UserTimeline, nowIso?: string): Signa
   return {
     name: "support_sentiment",
     score,
-    weight: 0.15,
+    weight: WEIGHT,
     reason: `${negative} of ${total} recent support tickets had negative sentiment.`,
   };
 }

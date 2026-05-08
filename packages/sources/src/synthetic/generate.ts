@@ -80,7 +80,7 @@ export function generate(opts: GenerateOpts): GenerateResult {
         continue;
       }
 
-      const trendMult = 1 + (persona.profile.sessions_trend - 1) * (d / Math.max(1, opts.days));
+      const trendMult = computeTrendMult(persona, d, opts.days);
 
       // stochastic rounding so fractional rates accumulate over time
       const baselineDaily = persona.profile.sessions_per_week.mean / 7;
@@ -176,6 +176,21 @@ export function generate(opts: GenerateOpts): GenerateResult {
   }
 
   return { events, ground_truth };
+}
+
+function computeTrendMult(persona: Persona, d: number, days: number): number {
+  const denom = Math.max(1, days);
+  const trend = persona.profile.sessions_trend;
+  const profile = persona.profile.trend_profile ?? "linear";
+  if (profile === "linear") {
+    return 1 + (trend - 1) * (d / denom);
+  }
+  // rebound: dip linearly to `trend` at midpoint, then climb to ~1.5 by end
+  const half = denom / 2;
+  if (d <= half) {
+    return 1 + (trend - 1) * (d / half);
+  }
+  return trend + (1.5 - trend) * ((d - half) / half);
 }
 
 function sampleByWeight(items: Persona[], totalWeight: number, rng: () => number): Persona {

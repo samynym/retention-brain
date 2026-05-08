@@ -14,9 +14,15 @@ const JudgeSchema = z.object({
 
 export type LlmJudgeResult = z.infer<typeof JudgeSchema>;
 
+export class LlmJudgeUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LlmJudgeUnavailableError";
+  }
+}
+
 const MAX_EVENTS = 30;
 
-// Returns { narrative_risk, reason } from the LLM, or a zero-risk fallback on error.
 export async function llmJudge(timeline: UserTimeline): Promise<LlmJudgeResult> {
   try {
     const recent = timeline.events.slice(-MAX_EVENTS);
@@ -41,10 +47,7 @@ export async function llmJudge(timeline: UserTimeline): Promise<LlmJudgeResult> 
 
     return object;
   } catch (err) {
-    return {
-      narrative_risk: 0,
-      reason: `LLM judge unavailable: ${err instanceof Error ? err.message : String(err)}`,
-    };
+    throw new LlmJudgeUnavailableError(err instanceof Error ? err.message : String(err));
   }
 }
 

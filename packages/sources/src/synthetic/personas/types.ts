@@ -4,6 +4,12 @@ export type ChurnReason =
   | "support_complaint"
   | "crash_storm";
 
+/**
+ * "linear": sessions_trend is the end-of-window multiplier — interpolated linearly from 1.0 at d=0.
+ * "rebound": sessions_trend is the *minimum* multiplier reached at the midpoint, then rebounds to ~1.5 at the end.
+ */
+export type TrendProfile = "linear" | "rebound";
+
 export type Persona = {
   name: string;
   weight: number;
@@ -18,5 +24,6 @@ export type Persona = {
     churn_reason: ChurnReason | null;
     /** Daily session-rate trend: 1.0 = flat, <1 = declining, >1 = rising */
     sessions_trend: number;
+    trend_profile?: TrendProfile;
   };
 };

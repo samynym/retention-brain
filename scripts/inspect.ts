@@ -2,6 +2,7 @@
 
 import { syntheticSource } from "../packages/sources/src/synthetic/index.js";
 import { buildTimelines, type Event } from "../packages/core/src/index.js";
+import { scoreAll } from "../packages/risk-engine/src/index.js";
 
 const NUM_USERS = 1000;
 const DAYS = 30;
@@ -121,6 +122,67 @@ for (const g of src.ground_truth) {
     .map(([k, n]) => `${k}=${n}`)
     .join(", ");
   console.log(`    events: ${summary}`);
+}
+
+console.log("\n--- 6. Average risk score per persona (heuristic only, useLLM=false) ---");
+const scores = await scoreAll(timelines, { useLLM: false });
+const scoreByUser = new Map(scores.map((s) => [s.user_id, s.score]));
+
+const ADVERSARIAL = new Set(["re_engager", "crashy_loyal", "silent_lurker"]);
+const TRUE_CHURNERS = new Set(["lapsing", "wavering", "free_rider"]);
+
+type Bucket = { sum: number; n: number; sumChurned: number; nChurned: number };
+const personaScoreSums = new Map<string, Bucket>();
+for (const g of src.ground_truth) {
+  const s = scoreByUser.get(g.user_id);
+  if (s === undefined) continue;
+  const cur = personaScoreSums.get(g.persona) ?? { sum: 0, n: 0, sumChurned: 0, nChurned: 0 };
+  cur.sum += s;
+  cur.n += 1;
+  if (g.will_churn) {
+    cur.sumChurned += s;
+    cur.nChurned += 1;
+  }
+  personaScoreSums.set(g.persona, cur);
+}
+const scoreTable = [...personaScoreSums.entries()]
+  .sort((a, b) => b[1].sum / b[1].n - a[1].sum / a[1].n)
+  .map(([name, s]) => {
+    const avg = s.sum / s.n;
+    const churnedAvg = s.nChurned > 0 ? s.sumChurned / s.nChurned : 0;
+    const tag = ADVERSARIAL.has(name)
+      ? "  [adversarial — avg should be < 0.4]"
+      : TRUE_CHURNERS.has(name)
+      ? "  [true churner — churned-only avg should be ≥ 0.5]"
+      : "";
+    return `  ${name.padEnd(20)} avg=${avg.toFixed(3)}  churned_avg=${churnedAvg.toFixed(3)}  n=${s.n} (${s.nChurned} churned)${tag}`;
+  })
+  .join("\n");
+console.log(scoreTable);
+
+const failures: string[] = [];
+for (const [name, s] of personaScoreSums) {
+  const avg = s.sum / s.n;
+  if (ADVERSARIAL.has(name) && avg >= 0.4) {
+    failures.push(`  ✗ ${name}: avg=${avg.toFixed(3)} ≥ 0.4 (expected < 0.4)`);
+  }
+  if (TRUE_CHURNERS.has(name) && s.nChurned > 0) {
+    const cAvg = s.sumChurned / s.nChurned;
+    if (cAvg < 0.5) {
+      failures.push(`  ✗ ${name}: churned_avg=${cAvg.toFixed(3)} < 0.5 (expected ≥ 0.5)`);
+    }
+  }
+}
+if (failures.length === 0) {
+  console.log("\n  ✓ all adversarial personas avg < 0.4 and all true churners' churned-avg ≥ 0.5");
+} else {
+  console.log("\n  Status:");
+  console.log(failures.join("\n"));
+  console.log(
+    "\n  Note: with 30-day windows the true-churner ≥0.5 bar is not reachable" +
+      "\n  without pushing adversarial silent_lurker above 0.4 (both look low-usage)." +
+      "\n  This is the honest baseline — see scripts/inspect.ts and SPEC notes."
+  );
 }
 
 console.log("\n=== done ===\n");
