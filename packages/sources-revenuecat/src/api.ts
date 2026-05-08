@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { fetchWithRetry } from "@rcrb/sources";
 
 const BASE_URL = "https://api.revenuecat.com/v2";
 
@@ -57,7 +58,6 @@ const ListResponse = z.object({
 });
 
 const MAX_PAGES = 1000;
-const MAX_429_RETRIES = 3;
 
 export function rcApi(config: RCConfig) {
   const headers = {
@@ -67,21 +67,12 @@ export function rcApi(config: RCConfig) {
 
   async function get(path: string): Promise<unknown> {
     const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
-    for (let attempt = 0; attempt <= MAX_429_RETRIES; attempt++) {
-      const res = await fetch(url, { headers });
-      if (res.status === 429 && attempt < MAX_429_RETRIES) {
-        const retryAfter = Number(res.headers.get("retry-after"));
-        const waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000 * (attempt + 1);
-        await new Promise((r) => setTimeout(r, waitMs));
-        continue;
-      }
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        throw new Error(`RevenueCat ${res.status} ${res.statusText}: ${body}`);
-      }
-      return res.json();
+    const res = await fetchWithRetry(url, { headers });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`RevenueCat ${res.status} ${res.statusText}: ${body}`);
     }
-    throw new Error(`RevenueCat: exhausted ${MAX_429_RETRIES} retries on 429`);
+    return res.json();
   }
 
   async function* paginate<T>(initialPath: string, schema: z.ZodType<T>): AsyncIterable<T> {
