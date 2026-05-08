@@ -5,6 +5,7 @@
     { "path": "./packages/sources" },
     { "path": "./packages/risk-engine" },
     { "path": "./packages/intervention-agent" },
-    { "path": "./packages/eval" }
+    { "path": "./packages/eval" },
+    { "path": "./packages/cli" }
   ]
 }
