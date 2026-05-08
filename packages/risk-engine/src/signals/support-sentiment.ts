@@ -3,10 +3,6 @@ import type { Signal } from "./types.js";
 
 const DAY_MS = 86_400_000;
 
-/**
- * Count negative-sentiment tickets (payload.sentiment === "negative") in last 14 days.
- * Score = negative / total tickets, with score 0 if no recent tickets.
- */
 export function supportSentiment(timeline: UserTimeline, nowIso?: string): Signal {
   if (timeline.events.length === 0) {
     return {
