@@ -6,6 +6,7 @@
     { "path": "./packages/sources-revenuecat" },
     { "path": "./packages/sources-stripe" },
     { "path": "./packages/sources-sentry" },
+    { "path": "./packages/sources-posthog" },
     { "path": "./packages/risk-engine" },
     { "path": "./packages/intervention-agent" },
     { "path": "./packages/eval" },

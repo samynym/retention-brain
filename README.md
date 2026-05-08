@@ -84,4 +84,34 @@ For cross-source matching, set Sentry's `user.id` to your application's internal
 
 `level: "fatal"` events map to `error.crash`; everything else maps to `error.client`. Pass `host` to `sentrySource` to point at a self-hosted Sentry instance.
 
+### PostHog
+
+```sh
+export POSTHOG_PERSONAL_API_KEY=phx_...
+export POSTHOG_PROJECT_ID=12345
+# Optional — override for EU cloud or self-hosted (default: https://us.posthog.com)
+export POSTHOG_HOST=https://eu.posthog.com
+```
+
+```ts
+import { postHogSource } from "@rcrb/sources-posthog";
+
+const source = postHogSource({
+  personalApiKey: process.env.POSTHOG_PERSONAL_API_KEY!,
+  projectId: process.env.POSTHOG_PROJECT_ID!,
+  host: process.env.POSTHOG_HOST,
+});
+
+for await (const event of source.backfill({
+  since: new Date(Date.now() - 7 * 86_400_000),
+  until: new Date(),
+})) {
+  console.log(event);
+}
+```
+
+For cross-source matching, set `app_user_id` either as a person property (via `$set`/`$identify`) or as an event property in your captures. The connector emits events keyed on that id when present, falling back to `distinct_id`. PostHog's `$email` property surfaces in the event payload as `email`.
+
+`$session_start` events map to `usage.session`; everything else (custom events, `$pageview`, `$autocapture`) maps to `usage.feature`. `$identify`/`$set`/`$groupidentify` are skipped (metadata, not behavior).
+
 MIT License.
