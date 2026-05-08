@@ -27,6 +27,21 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
 
+  packages/eval:
+    dependencies:
+      '@rcrb/core':
+        specifier: workspace:*
+        version: link:../core
+      '@rcrb/intervention-agent':
+        specifier: workspace:*
+        version: link:../intervention-agent
+      '@rcrb/risk-engine':
+        specifier: workspace:*
+        version: link:../risk-engine
+      '@rcrb/sources':
+        specifier: workspace:*
+        version: link:../sources
+
   packages/intervention-agent:
     dependencies:
       '@ai-sdk/anthropic':
