@@ -1,4 +1,4 @@
-import type { UserTimeline } from "@rcrb/core";
+import { MODEL_ID, type UserTimeline } from "@rcrb/core";
 import { generateObject } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
@@ -14,7 +14,6 @@ const JudgeSchema = z.object({
 
 export type LlmJudgeResult = z.infer<typeof JudgeSchema>;
 
-const MODEL_ID = "claude-sonnet-4-6";
 const MAX_EVENTS = 30;
 
 // Returns { narrative_risk, reason } from the LLM, or a zero-risk fallback on error.

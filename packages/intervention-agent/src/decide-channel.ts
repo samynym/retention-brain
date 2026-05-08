@@ -1,8 +1,9 @@
 import { generateObject } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
-import type { UserTimeline } from "@rcrb/core";
+import { MODEL_ID } from "@rcrb/core";
 import type { RiskScore } from "@rcrb/risk-engine";
+import { formatTopSignals } from "./prompts.js";
 
 const Schema = z.object({
   channel: z.enum(["email", "push", "in_app", "dunning_fix", "no_op"]),
@@ -11,16 +12,7 @@ const Schema = z.object({
 
 export type ChannelDecision = z.infer<typeof Schema>;
 
-const MODEL_ID = "claude-sonnet-4-6";
-
-export async function decideChannel(
-  risk: RiskScore,
-  _timeline: UserTimeline
-): Promise<ChannelDecision> {
-  const topReasons = risk.top_signals
-    .map((s) => `- ${s.name} (score=${s.score.toFixed(2)}): ${s.reason}`)
-    .join("\n");
-
+export async function decideChannel(risk: RiskScore): Promise<ChannelDecision> {
   const { object } = await generateObject({
     model: anthropic(MODEL_ID),
     schema: Schema,
@@ -31,7 +23,7 @@ export async function decideChannel(
       `User: ${risk.user_id}\n` +
       `Risk score: ${risk.score.toFixed(2)}\n` +
       `Narrative: ${risk.narrative}\n` +
-      `Top signals:\n${topReasons}\n\n` +
+      `Top signals:\n${formatTopSignals(risk, { withScore: true })}\n\n` +
       `Channel guidance:\n` +
       `- email: explanations, longer messages, confirmations\n` +
       `- push: brief nudge, only if user has been engaged recently\n` +

@@ -1,8 +1,9 @@
 import { generateObject } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
-import type { Channel } from "@rcrb/core";
+import { MODEL_ID, type Channel } from "@rcrb/core";
 import type { RiskScore } from "@rcrb/risk-engine";
+import { formatTopSignals } from "./prompts.js";
 
 const Schema = z.object({
   kind: z.enum([
@@ -19,16 +20,10 @@ const Schema = z.object({
 
 export type OfferDecision = z.infer<typeof Schema>;
 
-const MODEL_ID = "claude-sonnet-4-6";
-
 export async function decideOffer(
   risk: RiskScore,
   channel: Channel
 ): Promise<OfferDecision> {
-  const topReasons = risk.top_signals
-    .map((s) => `- ${s.name} (score=${s.score.toFixed(2)}): ${s.reason}`)
-    .join("\n");
-
   const { object } = await generateObject({
     model: anthropic(MODEL_ID),
     schema: Schema,
@@ -40,7 +35,7 @@ export async function decideOffer(
       `Risk score: ${risk.score.toFixed(2)}\n` +
       `Channel: ${channel}\n` +
       `Narrative: ${risk.narrative}\n` +
-      `Top signals:\n${topReasons}\n\n` +
+      `Top signals:\n${formatTopSignals(risk, { withScore: true })}\n\n` +
       `Offer guidance:\n` +
       `- discount_percent: 10–25 typical; for usage_decline or post-trial\n` +
       `- discount_amount: a flat-amount discount when % doesn't fit\n` +

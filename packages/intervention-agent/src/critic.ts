@@ -1,7 +1,7 @@
 import { generateObject } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
-import type { Intervention } from "@rcrb/core";
+import { MODEL_ID, type Intervention } from "@rcrb/core";
 
 const CriticSchema = z.object({
   scores: z.object({
@@ -15,8 +15,6 @@ const CriticSchema = z.object({
 });
 
 export type Critique = z.infer<typeof CriticSchema>;
-
-const MODEL_ID = "claude-sonnet-4-6";
 
 export async function critique(intervention: Intervention): Promise<Critique> {
   const offerLine =
