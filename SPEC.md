@@ -217,11 +217,14 @@ Constraint: ≥1 of {RC, Stripe} must be configured at runtime. Sentry + PostHog
 
 Each connector ships with: API client, webhook listener (where applicable), event schema mapper, user matcher, smoke test, README section.
 
-**Phase 7 — Briefing renderer + seed-sandbox (~3-4 agent-hrs)**
+**Phase 7 — Briefing renderer + seed-sandbox + temporal holdout (~4-5 agent-hrs)**
 
-- `npx rc-retention-brain run` writes `briefing-<date>.md` (markdown briefing the user reads)
-- `npx rc-retention-brain seed-sandbox` populates an RC sandbox + Stripe test mode + (optional) Sentry + PostHog with ~50 realistic users so install can be validated end-to-end without a real app
+- `npx rc-retention-brain run [--as-of <date>]` writes `briefing-<date>.md` (markdown briefing the user reads). `--as-of` lets you evaluate at a specific cutoff date instead of "now."
+- `npx rc-retention-brain seed-sandbox --train-days 30 --eval-days 30` populates RC + Stripe + (optional) Sentry + PostHog with ~50 realistic users for the train window only, staging the eval window locally for later reveal.
+- `npx rc-retention-brain reveal-future` pushes the staged eval window to the sandboxes, then computes a **temporal holdout eval**: of the users flagged at the cutoff, how many actually churned in the eval window? Of churners, how many were caught? Reports real precision/recall/F1 on real-API data.
 - `--watch` mode for continuous polling of webhook-friendly sources
+
+**The temporal holdout is the v1 evaluation methodology.** It's the closest thing to real-world deployment without real users — the brain only sees train-window events, predicts, then we compare to actuals. This is what gets put in the DM: real numbers, real APIs, real time-correctness, no peeking at future data.
 
 **No `--send` channel in v1.** Resend connector is deferred to v1.x. Briefing-first is the trust ask v1 makes.
 
@@ -243,7 +246,7 @@ The eval suite + rubric carry through every phase — no phase ships without pas
 | v1.0 | RC sandbox + Stripe test + Sentry + PostHog, seeded with ~50 realistic users | Real-API briefing, install-and-go in <10 min — **DM trigger** |
 | v1.1+ | Real production app (yours or a friend's via outreach) | Real users, real outcomes |
 
-**Path A (locked):** Sandbox-only validation for v1. The seed-sandbox script populates real RC/Stripe/Sentry/PostHog sandboxes with realistic events; the brain runs against real APIs. This proves install + connectors + briefing format on real systems. It does not prove real-world signal quality — that's v1.1+ when real-app data appears.
+**Path A (locked):** Sandbox-only validation for v1. The seed-sandbox script populates real RC/Stripe/Sentry/PostHog sandboxes with realistic events split into train + eval windows; the brain runs against real APIs at the cutoff date; `reveal-future` then pushes the eval window and computes actual-vs-predicted metrics. This proves install + connectors + briefing format + time-correct prediction on real systems. It does not prove real-world signal quality on real-user behavior — that's v1.1+ when real-app data appears.
 
 The contract layer (normalized `Event` and `Intervention` types) matches real RC webhook + Stripe event payloads, so the v0 → v1 transition is "swap source," not a rewrite.
 
