@@ -28,23 +28,20 @@ const FEATURES = [
 
 export function generate(opts: GenerateOpts): GenerateResult {
   const rng = seedrandom(opts.seed);
-  // Default to a fixed reference date so the simulator is fully deterministic
-  // given seed alone. Pass start_date explicitly for "now-relative" runs.
   const start = opts.start_date ?? new Date("2026-01-01T00:00:00.000Z");
+  const startMs = start.getTime();
+  const totalWeight = personas.reduce((s, p) => s + p.weight, 0);
   const events: Event[] = [];
   const ground_truth: GroundTruthLabel[] = [];
   let evtCounter = 0;
 
   for (let i = 0; i < opts.num_users; i++) {
-    const persona = sampleByWeight(personas, rng);
+    const persona = sampleByWeight(personas, totalWeight, rng);
     const user_id = `user_${i}`;
     const email = `user${i}@example.test`;
 
-    // Decide churn: even within "will_churn" personas, only ~half actually churn
     const willActuallyChurn = persona.profile.will_churn && rng() < 0.5;
-    // Churners cancel in the last 45% of the window, with jitter.
-    // For days=30, this puts churn in [16, 29]. Keeps the decline trend
-    // visible and gives the late window enough non-churned activity.
+    // churn lands in the last ~45% of the window
     const churnDay = willActuallyChurn
       ? Math.floor(opts.days * 0.55 + rng() * opts.days * 0.4)
       : null;
@@ -53,42 +50,29 @@ export function generate(opts: GenerateOpts): GenerateResult {
       user_id,
       persona: persona.name,
       will_churn: willActuallyChurn,
-      churn_at:
-        churnDay === null
-          ? null
-          : new Date(start.getTime() + churnDay * 86_400_000).toISOString(),
+      churn_at: churnDay === null ? null : new Date(startMs + churnDay * 86_400_000).toISOString(),
       churn_reason: willActuallyChurn ? persona.profile.churn_reason : null,
     });
 
-    // Initial purchase: between 1-60 days before window starts
     events.push({
       id: `evt_${evtCounter++}`,
       user_id,
       kind: "subscription.purchase",
-      timestamp: new Date(
-        start.getTime() - 86_400_000 * (1 + Math.floor(rng() * 60))
-      ).toISOString(),
+      timestamp: new Date(startMs - 86_400_000 * (1 + Math.floor(rng() * 60))).toISOString(),
       source: "synthetic",
-      payload: {
-        product: "pro_monthly",
-        price: 9.99,
-        currency: "USD",
-        email,
-      },
+      payload: { product: "pro_monthly", price: 9.99, currency: "USD", email },
     });
 
-    // Per-day generation
     for (let d = 0; d < opts.days; d++) {
-      // Stop activity at/after churn day
+      const dayMs = startMs + d * 86_400_000;
+
       if (churnDay !== null && d >= churnDay) {
         if (d === churnDay) {
           events.push({
             id: `evt_${evtCounter++}`,
             user_id,
             kind: "subscription.cancel",
-            timestamp: new Date(
-              start.getTime() + d * 86_400_000
-            ).toISOString(),
+            timestamp: new Date(dayMs).toISOString(),
             source: "synthetic",
             payload: { reason: persona.profile.churn_reason },
           });
@@ -96,40 +80,25 @@ export function generate(opts: GenerateOpts): GenerateResult {
         continue;
       }
 
-      // Daily multiplier: linear interpolation from 1.0 at d=0 to sessions_trend at d=days
-      const trendMult =
-        1 +
-        (persona.profile.sessions_trend - 1) *
-          (d / Math.max(1, opts.days));
+      const trendMult = 1 + (persona.profile.sessions_trend - 1) * (d / Math.max(1, opts.days));
 
-      // Sessions today, using stochastic rounding so low expected rates
-      // (e.g., 0.3 sessions/day) produce non-zero counts over time.
+      // stochastic rounding so fractional rates accumulate over time
       const baselineDaily = persona.profile.sessions_per_week.mean / 7;
-      const noise =
-        (rng() - 0.5) * (persona.profile.sessions_per_week.sd / 7);
-      const expectedSessions = Math.max(
-        0,
-        baselineDaily * trendMult + noise
-      );
+      const noise = (rng() - 0.5) * (persona.profile.sessions_per_week.sd / 7);
+      const expectedSessions = Math.max(0, baselineDaily * trendMult + noise);
       const sessionsToday =
         Math.floor(expectedSessions) +
         (rng() < expectedSessions - Math.floor(expectedSessions) ? 1 : 0);
 
       for (let s = 0; s < sessionsToday; s++) {
-        const ts = new Date(
-          start.getTime() +
-            d * 86_400_000 +
-            Math.floor(rng() * 86_400_000)
-        ).toISOString();
+        const ts = new Date(dayMs + Math.floor(rng() * 86_400_000)).toISOString();
         events.push({
           id: `evt_${evtCounter++}`,
           user_id,
           kind: "usage.session",
           timestamp: ts,
           source: "synthetic",
-          payload: {
-            duration_seconds: Math.floor(60 + rng() * 600),
-          },
+          payload: { duration_seconds: Math.floor(60 + rng() * 600) },
         });
 
         const featuresThisSession = Math.max(
@@ -151,21 +120,18 @@ export function generate(opts: GenerateOpts): GenerateResult {
         }
       }
 
-      // Crash event
       if (rng() < persona.profile.crash_rate) {
         events.push({
           id: `evt_${evtCounter++}`,
           user_id,
           kind: "error.crash",
-          timestamp: new Date(
-            start.getTime() + d * 86_400_000
-          ).toISOString(),
+          timestamp: new Date(dayMs).toISOString(),
           source: "synthetic",
           payload: { stack: "synthetic crash trace" },
         });
       }
 
-      // Support ticket (rate is monthly → divide by 30 for daily probability)
+      // ticket rate is monthly, so divide by 30 for daily probability
       if (rng() < persona.profile.support_ticket_rate / 30) {
         const sentiment =
           persona.profile.churn_reason === "support_complaint" || rng() < 0.3
@@ -175,30 +141,24 @@ export function generate(opts: GenerateOpts): GenerateResult {
           id: `evt_${evtCounter++}`,
           user_id,
           kind: "support.ticket_open",
-          timestamp: new Date(
-            start.getTime() + d * 86_400_000
-          ).toISOString(),
+          timestamp: new Date(dayMs).toISOString(),
           source: "synthetic",
           payload: { sentiment },
         });
       }
 
-      // Renewal day (every 30 days)
       if (d > 0 && d % 30 === 29) {
         const failed = rng() < persona.profile.payment_failure_rate;
         events.push({
           id: `evt_${evtCounter++}`,
           user_id,
           kind: failed ? "payment.failure" : "payment.success",
-          timestamp: new Date(
-            start.getTime() + d * 86_400_000
-          ).toISOString(),
+          timestamp: new Date(dayMs).toISOString(),
           source: "synthetic",
           payload: { amount: 9.99, currency: "USD" },
         });
       }
 
-      // Free-rider personas: high payment-failure rate even mid-cycle
       if (
         persona.profile.churn_reason === "payment_failure" &&
         rng() < persona.profile.payment_failure_rate / 30
@@ -207,9 +167,7 @@ export function generate(opts: GenerateOpts): GenerateResult {
           id: `evt_${evtCounter++}`,
           user_id,
           kind: "payment.failure",
-          timestamp: new Date(
-            start.getTime() + d * 86_400_000
-          ).toISOString(),
+          timestamp: new Date(dayMs).toISOString(),
           source: "synthetic",
           payload: { amount: 9.99, currency: "USD", mid_cycle: true },
         });
@@ -217,13 +175,11 @@ export function generate(opts: GenerateOpts): GenerateResult {
     }
   }
 
-  events.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   return { events, ground_truth };
 }
 
-function sampleByWeight(items: Persona[], rng: () => number): Persona {
-  const total = items.reduce((s, p) => s + p.weight, 0);
-  let r = rng() * total;
+function sampleByWeight(items: Persona[], totalWeight: number, rng: () => number): Persona {
+  let r = rng() * totalWeight;
   for (const item of items) {
     r -= item.weight;
     if (r <= 0) return item;
