@@ -8,4 +8,6 @@ coverage/
 .vitest-cache/
 *.tsbuildinfo
 interventions/
-briefing-*.md
+/briefing-*.md
+/temporal-holdout-*.md
+/.staged-future.json
