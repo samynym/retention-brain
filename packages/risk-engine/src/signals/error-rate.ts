@@ -2,13 +2,14 @@ import type { UserTimeline } from "@rcrb/core";
 import type { Signal } from "./types.js";
 
 const DAY_MS = 86_400_000;
+const WEIGHT = 0.05;
 
 export function errorRate(timeline: UserTimeline, nowIso?: string): Signal {
   if (timeline.events.length === 0) {
     return {
       name: "error_rate",
       score: 0,
-      weight: 0.1,
+      weight: WEIGHT,
       reason: "No events in timeline.",
     };
   }
@@ -33,7 +34,7 @@ export function errorRate(timeline: UserTimeline, nowIso?: string): Signal {
   return {
     name: "error_rate",
     score,
-    weight: 0.1,
+    weight: WEIGHT,
     reason: crashes === 0 ? "No crashes in the last 14 days." : `${crashes} crash${crashes === 1 ? "" : "es"} in the last 14 days.`,
   };
 }

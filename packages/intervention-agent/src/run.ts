@@ -54,6 +54,7 @@ export async function generateIntervention(
 
     try {
       const review = await critique(intervention);
+      intervention.critique = review;
       if (review.recommendation !== "accept") {
         console.warn(
           `[intervention-agent] ${risk.user_id}: critic=${review.recommendation} (${review.notes})`

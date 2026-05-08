@@ -27,6 +27,18 @@ export const Timing = z.enum([
 ]);
 export type Timing = z.infer<typeof Timing>;
 
+export const InterventionCritique = z.object({
+  scores: z.object({
+    relevance: z.number().min(1).max(5),
+    personalization: z.number().min(1).max(5),
+    tone: z.number().min(1).max(5),
+    plausibility: z.number().min(1).max(5),
+  }),
+  notes: z.string(),
+  recommendation: z.enum(["accept", "revise", "reject"]),
+});
+export type InterventionCritique = z.infer<typeof InterventionCritique>;
+
 export const Intervention = z.object({
   user_id: z.string(),
   risk_score: z.number().min(0).max(1),
@@ -46,5 +58,6 @@ export const Intervention = z.object({
     confidence: z.enum(["low", "medium", "high"]),
     note: z.string(),
   }),
+  critique: InterventionCritique.optional(),
 });
 export type Intervention = z.infer<typeof Intervention>;

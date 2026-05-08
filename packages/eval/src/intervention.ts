@@ -15,6 +15,9 @@ const ZERO: InterventionEval = {
 
 const CRITIQUE_CONCURRENCY = 5;
 
+// Use Opus to break the Sonnet-judges-Sonnet closed loop in eval mode.
+const EVAL_CRITIC_MODEL = "claude-opus-4-7";
+
 export async function evalInterventions(interventions: Intervention[]): Promise<InterventionEval> {
   if (interventions.length === 0) return ZERO;
 
@@ -25,7 +28,7 @@ export async function evalInterventions(interventions: Intervention[]): Promise<
     const results = await Promise.all(
       chunk.map(async (intv): Promise<Critique | null> => {
         try {
-          return await critique(intv);
+          return await critique(intv, { model: EVAL_CRITIC_MODEL });
         } catch (err) {
           console.warn(
             `[eval] critique failed for ${intv.user_id}: ${err instanceof Error ? err.message : String(err)}`

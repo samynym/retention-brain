@@ -2,6 +2,10 @@ import type { UserTimeline } from "@rcrb/core";
 import type { Signal } from "./types.js";
 
 const DAY_MS = 86_400_000;
+// Phase 5.5: lifecycle_stage was non-discriminating in synthetic data
+// (similar scores across personas). Weight set to 0 — kept for diagnostic
+// reasons in the top_signals table but doesn't affect combined score.
+const WEIGHT = 0.0;
 
 export function lifecycleStage(timeline: UserTimeline, nowIso?: string): Signal {
   const purchase = timeline.events.find((e) => e.kind === "subscription.purchase");
@@ -9,7 +13,7 @@ export function lifecycleStage(timeline: UserTimeline, nowIso?: string): Signal 
     return {
       name: "lifecycle_stage",
       score: 0,
-      weight: 0.1,
+      weight: WEIGHT,
       reason: "No subscription.purchase event in timeline.",
     };
   }
@@ -37,7 +41,7 @@ export function lifecycleStage(timeline: UserTimeline, nowIso?: string): Signal 
   return {
     name: "lifecycle_stage",
     score,
-    weight: 0.1,
+    weight: WEIGHT,
     reason: `Subscriber for ${days.toFixed(0)} days — ${stage}.`,
   };
 }
