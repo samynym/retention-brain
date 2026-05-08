@@ -6,10 +6,20 @@ import { generateAll } from "@rcrb/intervention-agent";
 import { evalPredictions } from "@rcrb/eval";
 
 const DAY_MS = 86_400_000;
+const DEMO_THRESHOLD = 0.4;
+
+function parsePositiveInt(value: string, name: string): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) {
+    console.error(kleur.red(`invalid --${name}: ${value} (expected positive integer)`));
+    process.exit(2);
+  }
+  return n;
+}
 
 export async function runDemo(opts: { users: string; days: string; seed: string }) {
-  const num_users = parseInt(opts.users, 10);
-  const days = parseInt(opts.days, 10);
+  const num_users = parsePositiveInt(opts.users, "users");
+  const days = parsePositiveInt(opts.days, "days");
   const seed = opts.seed;
   const start = new Date("2026-01-01T00:00:00.000Z");
 
@@ -27,8 +37,8 @@ export async function runDemo(opts: { users: string; days: string; seed: string 
 
   console.log(kleur.cyan(`📊 Risk Engine: scoring ${timelines.length} users...`));
   const scores = await scoreAll(timelines, { useLLM: false });
-  const flagged = scores.filter((s) => s.score >= 0.4).sort((a, b) => b.score - a.score);
-  console.log(`   • ${kleur.yellow(flagged.length.toString())} users flagged at risk (>=0.40)`);
+  const flagged = scores.filter((s) => s.score >= DEMO_THRESHOLD).sort((a, b) => b.score - a.score);
+  console.log(`   • ${kleur.yellow(flagged.length.toString())} users flagged at risk (>=${DEMO_THRESHOLD.toFixed(2)})`);
 
   const sigCounts = new Map<string, number>();
   for (const s of flagged) {
@@ -44,10 +54,10 @@ export async function runDemo(opts: { users: string; days: string; seed: string 
     console.log(`   • Top signals: ${sigSummary}`);
   }
 
-  if (process.env.ANTHROPIC_API_KEY) {
+  if (flagged.length > 0 && process.env.ANTHROPIC_API_KEY) {
     console.log(kleur.cyan(`🤖 Intervention Agent: generating plays for top 5...`));
     const tlByUser = new Map(timelines.map((t) => [t.user_id, t]));
-    const interventions = await generateAll(scores, tlByUser, { threshold: 0.4, max: 5 });
+    const interventions = await generateAll(scores, tlByUser, { threshold: DEMO_THRESHOLD, max: 5 });
     for (const i of interventions) {
       console.log("");
       console.log(`User ${kleur.bold(i.user_id)} (risk ${i.risk_score.toFixed(2)})`);
@@ -60,12 +70,12 @@ export async function runDemo(opts: { users: string; days: string; seed: string 
       if (i.copy.subject) console.log(`  Subject: ${i.copy.subject}`);
       console.log(`  Body: ${i.copy.body.slice(0, 200)}${i.copy.body.length > 200 ? "..." : ""}`);
     }
-  } else {
-    console.log(kleur.dim(`(set ANTHROPIC_API_KEY to generate interventions)`));
+  } else if (!process.env.ANTHROPIC_API_KEY) {
+    console.log(kleur.dim(`(set ANTHROPIC_API_KEY to generate interventions — e.g. export ANTHROPIC_API_KEY=sk-ant-...)`));
   }
 
   console.log("");
-  const predEval = evalPredictions(scores, src.ground_truth, 0.4);
+  const predEval = evalPredictions(scores, src.ground_truth, DEMO_THRESHOLD);
   console.log(
     kleur.green(
       `✅ Eval: precision ${predEval.precision.toFixed(2)} / recall ${predEval.recall.toFixed(2)} / F1 ${predEval.f1.toFixed(2)} vs synthetic ground truth`
