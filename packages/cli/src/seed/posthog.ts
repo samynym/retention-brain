@@ -1,6 +1,6 @@
 import type { Event } from "@rcrb/core";
 import { fetchWithRetry } from "@rcrb/sources";
-import type { SeedPushResult } from "./revenuecat.js";
+import type { SeedPushResult } from "./types.js";
 
 export type PostHogSeedConfig = {
   projectApiKey: string;

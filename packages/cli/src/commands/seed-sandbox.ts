@@ -54,12 +54,6 @@ export async function runSeedSandbox(opts: {
     enabled: bundle.enabled,
     idempotentReset,
   };
-  if (bundle.enabled.revenuecat) {
-    seedOpts.rcConfig = {
-      apiKey: process.env.REVENUECAT_API_KEY!,
-      projectId: process.env.REVENUECAT_PROJECT_ID!,
-    };
-  }
   if (bundle.enabled.stripe) {
     seedOpts.stripeConfig = { apiKey: process.env.STRIPE_API_KEY! };
   }

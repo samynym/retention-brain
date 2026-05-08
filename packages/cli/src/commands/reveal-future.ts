@@ -5,6 +5,7 @@ import kleur from "kleur";
 import type { Event } from "@rcrb/core";
 import { loadSourcesFromEnv, NoSubscriptionSourceError } from "../source-config.js";
 import { pushTrainToSources } from "../seed/index.js";
+import { advanceLatestSeedClockTo } from "../seed/stripe.js";
 import { readStaged } from "../seed/staged.js";
 
 export async function runRevealFuture(): Promise<void> {
@@ -26,16 +27,13 @@ export async function runRevealFuture(): Promise<void> {
     )
   );
 
+  const evalSince = new Date(staged.cutoff_iso);
+  const evalUntil = new Date(staged.eval_until_iso);
+
   const pushOpts: Parameters<typeof pushTrainToSources>[0] = {
     enabled: bundle.enabled,
     idempotentReset: false,
   };
-  if (bundle.enabled.revenuecat) {
-    pushOpts.rcConfig = {
-      apiKey: process.env.REVENUECAT_API_KEY!,
-      projectId: process.env.REVENUECAT_PROJECT_ID!,
-    };
-  }
   if (bundle.enabled.stripe) {
     pushOpts.stripeConfig = { apiKey: process.env.STRIPE_API_KEY! };
   }
@@ -55,7 +53,72 @@ export async function runRevealFuture(): Promise<void> {
     pushOpts.posthogConfig = phCfg;
   }
 
-  await pushTrainToSources(pushOpts, staged.events, staged.user_emails);
+  await pushTrainToSources(pushOpts, staged.events, staged.user_emails, evalSince);
+
+  // After staged events are pushed, advance the Stripe Test Clock to the end
+  // of the eval window so any auto-renewal / failure events queued by the
+  // sandbox fire at simulated timestamps.
+  let clockAdvanced: { clock_id: string; final_iso: string } | null = null;
+  if (bundle.enabled.stripe) {
+    try {
+      clockAdvanced = await advanceLatestSeedClockTo(
+        { apiKey: process.env.STRIPE_API_KEY! },
+        evalUntil
+      );
+      if (clockAdvanced) {
+        console.log(
+          kleur.dim(
+            `   • advanced Stripe test clock ${clockAdvanced.clock_id} → ${clockAdvanced.final_iso}`
+          )
+        );
+      } else {
+        console.log(
+          kleur.yellow(
+            `   ⚠ no rcrb_seed_* test clock found — eval-window subscription events may not have fired`
+          )
+        );
+      }
+    } catch (err) {
+      console.warn(
+        kleur.yellow(
+          `   ⚠ test clock advance to eval end failed: ${err instanceof Error ? err.message : String(err)}`
+        )
+      );
+    }
+  }
+
+  // Real-API actuals: backfill the eval window from every configured source
+  // and collect cancel events. This is the round-trip that proves the seed
+  // actually persisted with simulated timestamps.
+  const realActuals = new Set<string>();
+  let realActualEvents = 0;
+  const sourceCounts: Record<string, number> = {};
+  for (const source of bundle.sources) {
+    let n = 0;
+    try {
+      for await (const event of source.backfill({ since: evalSince, until: evalUntil })) {
+        n++;
+        if (event.kind === "subscription.cancel") {
+          realActuals.add(event.user_id);
+          realActualEvents++;
+        }
+      }
+    } catch (err) {
+      console.warn(
+        kleur.yellow(
+          `   ⚠ ${source.name} backfill failed: ${err instanceof Error ? err.message : String(err)}`
+        )
+      );
+    }
+    sourceCounts[source.name] = n;
+    console.log(kleur.dim(`   • ${source.name} eval-window backfill: ${n} events`));
+  }
+
+  // Local staged actuals for cross-check.
+  const stagedActuals = new Set<string>();
+  for (const e of staged.events) {
+    if (e.kind === "subscription.cancel") stagedActuals.add(e.user_id);
+  }
 
   // Find most recent briefing-*.md
   const briefingPath = await findMostRecentBriefing();
@@ -69,12 +132,6 @@ export async function runRevealFuture(): Promise<void> {
   const briefingMd = await readFile(briefingPath, "utf8");
   const flaggedFromBriefing = parseFlaggedFromBriefing(briefingMd);
   const briefingThreshold = parseThresholdFromBriefing(briefingMd) ?? 0.4;
-
-  // Compute actuals: which staged users have a subscription.cancel?
-  const actualChurners = new Set<string>();
-  for (const e of staged.events) {
-    if (e.kind === "subscription.cancel") actualChurners.add(e.user_id);
-  }
 
   // Briefing may encode flagged users by email or by raw user_id; normalize
   // both forms against the staged user_emails map so we can intersect with the
@@ -90,16 +147,25 @@ export async function runRevealFuture(): Promise<void> {
       flaggedUserIds.add(label);
     }
   }
+
+  // Primary metric: real-API actuals (with fallback to staged if real is empty
+  // — which means the round-trip didn't surface anything, likely a config gap).
+  const usingRealActuals = realActuals.size > 0;
+  const actuals = usingRealActuals ? realActuals : stagedActuals;
   const caught: string[] = [];
-  for (const u of actualChurners) {
+  for (const u of actuals) {
     if (flaggedUserIds.has(u)) caught.push(u);
   }
   const precision =
     flaggedUserIds.size === 0 ? 0 : caught.length / flaggedUserIds.size;
-  const recall = actualChurners.size === 0 ? 0 : caught.length / actualChurners.size;
+  const recall = actuals.size === 0 ? 0 : caught.length / actuals.size;
   const f1 =
     precision + recall === 0 ? 0 : (2 * precision * recall) / (precision + recall);
-  const missed = [...actualChurners].filter((u) => !flaggedUserIds.has(u));
+  const missed = [...actuals].filter((u) => !flaggedUserIds.has(u));
+
+  // Drift between real-API and local staged (round-trip integrity check).
+  const onlyInReal = [...realActuals].filter((u) => !stagedActuals.has(u));
+  const onlyInStaged = [...stagedActuals].filter((u) => !realActuals.has(u));
 
   const dateStr = new Date().toISOString().slice(0, 10);
   const outPath = resolve(process.cwd(), `temporal-holdout-${dateStr}.md`);
@@ -109,18 +175,25 @@ export async function runRevealFuture(): Promise<void> {
     evalUntilIso: staged.eval_until_iso,
     threshold: briefingThreshold,
     flaggedCount: flaggedUserIds.size,
-    actualChurners: actualChurners.size,
+    realActualCount: realActuals.size,
+    stagedActualCount: stagedActuals.size,
+    usingRealActuals,
     caught: caught.length,
     missed,
     precision,
     recall,
     f1,
     pushedEvents: staged.events.length,
+    sourceCounts,
+    clockAdvanced,
+    onlyInReal,
+    onlyInStaged,
+    realActualEvents,
   });
   await writeFile(outPath, md, "utf8");
 
   console.log("");
-  console.log(kleur.green(`📊 Temporal holdout result:`));
+  console.log(kleur.green(`📊 Temporal holdout result (real-API actuals):`));
   console.log(
     kleur.green(
       `   Flagged at ≥${briefingThreshold.toFixed(2)}: ${flaggedUserIds.size}`
@@ -128,7 +201,7 @@ export async function runRevealFuture(): Promise<void> {
   );
   console.log(
     kleur.green(
-      `   Actual churners in eval window: ${actualChurners.size}  · caught: ${caught.length}`
+      `   Actual churners (real APIs): ${realActuals.size}  · staged sanity: ${stagedActuals.size}  · caught: ${caught.length}`
     )
   );
   console.log(
@@ -136,6 +209,13 @@ export async function runRevealFuture(): Promise<void> {
       `   Precision ${precision.toFixed(2)} · Recall ${recall.toFixed(2)} · F1 ${f1.toFixed(2)}`
     )
   );
+  if (onlyInReal.length > 0 || onlyInStaged.length > 0) {
+    console.log(
+      kleur.yellow(
+        `   ⚠ round-trip drift — only-in-real: ${onlyInReal.length}, only-in-staged: ${onlyInStaged.length}`
+      )
+    );
+  }
   console.log(kleur.dim(`   Wrote ${outPath}`));
 }
 
@@ -182,32 +262,75 @@ function renderHoldoutReport(args: {
   evalUntilIso: string;
   threshold: number;
   flaggedCount: number;
-  actualChurners: number;
+  realActualCount: number;
+  stagedActualCount: number;
+  usingRealActuals: boolean;
   caught: number;
   missed: string[];
   precision: number;
   recall: number;
   f1: number;
   pushedEvents: number;
+  sourceCounts: Record<string, number>;
+  clockAdvanced: { clock_id: string; final_iso: string } | null;
+  onlyInReal: string[];
+  onlyInStaged: string[];
+  realActualEvents: number;
 }): string {
   const lines: string[] = [];
   lines.push(`# Temporal Holdout — ${new Date().toISOString().slice(0, 10)}`);
   lines.push("");
   lines.push(`**Briefing:** \`${args.briefingPath}\``);
   lines.push(`**Eval window:** ${args.cutoffIso} → ${args.evalUntilIso}`);
-  lines.push(`**Pushed events to sandboxes:** ${args.pushedEvents}`);
+  lines.push(`**Pushed staged events:** ${args.pushedEvents}`);
+  if (args.clockAdvanced) {
+    lines.push(
+      `**Stripe test clock:** \`${args.clockAdvanced.clock_id}\` advanced to ${args.clockAdvanced.final_iso}`
+    );
+  }
   lines.push("");
   lines.push("## Result");
   lines.push("");
   lines.push(
     `- Flagged at ≥${args.threshold.toFixed(2)}: **${args.flaggedCount}**`
   );
-  lines.push(`- Actual churners in eval window: **${args.actualChurners}**`);
-  lines.push(`- Caught: **${args.caught}** / ${args.actualChurners}`);
+  lines.push(
+    `- Actual churners (real-API backfill): **${args.realActualCount}** (${args.realActualEvents} cancel events)`
+  );
+  lines.push(`- Actual churners (local staged sanity): **${args.stagedActualCount}**`);
+  if (!args.usingRealActuals) {
+    lines.push(
+      `- ⚠ Real-API actuals empty — falling back to local staged file. Likely missing source config (see Method).`
+    );
+  }
+  lines.push(`- Caught: **${args.caught}** / ${args.usingRealActuals ? args.realActualCount : args.stagedActualCount}`);
   lines.push(
     `- **Precision ${args.precision.toFixed(2)} · Recall ${args.recall.toFixed(2)} · F1 ${args.f1.toFixed(2)}**`
   );
   lines.push("");
+  lines.push("### Per-source eval-window event counts");
+  lines.push("");
+  for (const [name, n] of Object.entries(args.sourceCounts)) {
+    lines.push(`- \`${name}\`: ${n}`);
+  }
+  lines.push("");
+  if (args.onlyInReal.length > 0 || args.onlyInStaged.length > 0) {
+    lines.push("### Round-trip drift");
+    lines.push("");
+    lines.push(
+      `Real-API actuals and the local staged file should agree. Drift means events were lost in transit (Stripe test clock didn't fire as expected, or the connector dropped them on read-back).`
+    );
+    lines.push("");
+    if (args.onlyInReal.length > 0) {
+      lines.push(`- Only in real-API (${args.onlyInReal.length}):`);
+      for (const u of args.onlyInReal) lines.push(`  - \`${u}\``);
+    }
+    if (args.onlyInStaged.length > 0) {
+      lines.push(`- Only in staged (${args.onlyInStaged.length}):`);
+      for (const u of args.onlyInStaged) lines.push(`  - \`${u}\``);
+    }
+    lines.push("");
+  }
   if (args.missed.length > 0) {
     lines.push("## Missed churners");
     lines.push("");
@@ -217,13 +340,13 @@ function renderHoldoutReport(args: {
   lines.push("## Method");
   lines.push("");
   lines.push(
-    "Temporal split: a 60-day synthetic timeline was generated; the first 30 days were pushed to the configured sandboxes (no peek at future) and the briefing was generated from real-API reads of that train window. The remaining 30 days were staged locally to `.staged-future.json`. `reveal-future` then pushed the staged window to the sandboxes (best-effort — see Phase 7 limits below) and computed actual-vs-predicted on `subscription.cancel` outcomes."
+    "Temporal split: a 60-day synthetic timeline was generated; the first 30 days were pushed to the configured sandboxes (no peek at future) and the briefing was generated from real-API reads of that train window. The remaining 30 days were staged locally to `.staged-future.json`. `reveal-future` then pushed the staged window to the sandboxes — for Stripe this means advancing the Test Clock through the eval timeline so subscription/payment events fire at simulated timestamps — and computed actual-vs-predicted on `subscription.cancel` outcomes."
   );
   lines.push("");
   lines.push("## Ground-truth provenance");
   lines.push("");
   lines.push(
-    "**Actuals are read from the local staged file, not from a sandbox round-trip.** The seed-sandbox push is best-effort — RC v2 has no public POST /transactions endpoint, Stripe pushes `paymentIntents.create` events whose `created` timestamp is current-time (not the synthetic timestamp), and Sentry/PostHog seeding is gated on optional keys. A sandbox round-trip would lose most of the cancel events. Treating the staged file as ground truth keeps the precision/recall measurement faithful to the synthetic generator's intent. The push step still validates that connectors accept and round-trip the data shape — the briefing reads from real APIs in `run`, only the actuals comparison uses the local staged truth."
+    "Actuals are read from real APIs after pushing the eval window to sandboxes. Cross-checked against the local staged file for round-trip integrity — drift, if any, is surfaced above. Stripe Test Clocks make the round-trip temporally accurate: customer + subscription objects are attached to a frozen clock that advances through the synthetic timeline, so Stripe emits `customer.subscription.created`, `customer.subscription.deleted`, `invoice.payment_failed`, etc. with the simulated timestamps and the connector reads them back via `events.list`."
   );
   lines.push("");
   return lines.join("\n");

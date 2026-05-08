@@ -61,6 +61,7 @@ For Stripe webhooks, use `verifyAndMap(rawBody, headers["stripe-signature"], { w
 export SENTRY_AUTH_TOKEN=...      # user auth token with event:read + project:read
 export SENTRY_ORG_SLUG=your-org
 export SENTRY_PROJECT_SLUG=your-project
+export SENTRY_DSN=...             # optional, used by seed-sandbox to write synthetic events
 ```
 
 ```ts
@@ -87,8 +88,9 @@ For cross-source matching, set Sentry's `user.id` to your application's internal
 ### PostHog
 
 ```sh
-export POSTHOG_PERSONAL_API_KEY=phx_...
+export POSTHOG_PERSONAL_API_KEY=phx_...      # for reads (events backfill)
 export POSTHOG_PROJECT_ID=12345
+export POSTHOG_PROJECT_API_KEY=phc_...        # for writes (seed-sandbox capture)
 # Optional — override for EU cloud or self-hosted (default: https://us.posthog.com)
 export POSTHOG_HOST=https://eu.posthog.com
 ```
@@ -113,5 +115,28 @@ for await (const event of source.backfill({
 For cross-source matching, set `app_user_id` either as a person property (via `$set`/`$identify`) or as an event property in your captures. The connector emits events keyed on that id when present, falling back to `distinct_id`. PostHog's `$email` property surfaces in the event payload as `email`.
 
 `$session_start` events map to `usage.session`; everything else (custom events, `$pageview`, `$autocapture`) maps to `usage.feature`. `$identify`/`$set`/`$groupidentify` are skipped (metadata, not behavior).
+
+## Sandbox setup (one-time)
+
+The temporal-holdout commands (`seed-sandbox` + `reveal-future`) push synthetic events to your sandboxes, then read them back via real APIs to measure precision/recall. For temporally-accurate sandbox testing, configure RC to observe Stripe — that's how RC is actually used in production:
+
+1. Create a Stripe **test mode** account (or use an existing one) and grab `sk_test_...`.
+2. Create an RC sandbox project at https://app.revenuecat.com.
+3. In RC sandbox: **Project Settings → Apps → New App → Stripe** and paste your Stripe test secret key. RC will now observe all Stripe test mode events (subscription created/cancelled/etc.) and surface them via its API.
+4. Set both keys in your `.env`:
+
+   ```sh
+   STRIPE_API_KEY=sk_test_...
+   REVENUECAT_API_KEY=sk_...           # RC sandbox secret key
+   REVENUECAT_PROJECT_ID=proj_...
+   ```
+
+`seed-sandbox` then pushes synthetic events to Stripe — using **Stripe Test Clocks** so subscriptions, renewals, and cancellations fire at simulated timestamps over the synthetic timeline rather than at wall-clock now. RC observes those events automatically through its Stripe app integration, and the brain reads from both via real APIs. Direct RC writes are intentionally not used because RC v2 has no public POST `/transactions` endpoint — the Stripe-as-billing-platform pattern is the right model.
+
+`reveal-future` advances the Test Clock to the end of the eval window, then backfills every configured source to compute actuals vs. the prior briefing's predictions. The temporal-holdout report cross-checks real-API actuals against the local staged file and surfaces any drift.
+
+### Cleanup
+
+`seed-sandbox` defaults to `--reset`, which deletes prior `rcrb_seed_*` test clocks (cascades to attached customers) and any leftover seed customers. Pass `--no-reset` to layer on top of an existing seed.
 
 MIT License.

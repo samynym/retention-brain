@@ -2,15 +2,17 @@ import kleur from "kleur";
 import { generate } from "@rcrb/sources/synthetic";
 import type { Event } from "@rcrb/core";
 import type { EnabledSources } from "../source-config.js";
-import {
-  pushRevenueCatEvents,
-  type RevenueCatSeedConfig,
-  type SeedPushResult,
-} from "./revenuecat.js";
+import type { SeedPushResult } from "./types.js";
 import { pushStripeEvents, type StripeSeedConfig } from "./stripe.js";
 import { pushSentryEvents, type SentrySeedConfig } from "./sentry.js";
 import { pushPostHogEvents, type PostHogSeedConfig } from "./posthog.js";
 import { writeStaged } from "./staged.js";
+
+// RC seeding is intentionally absent from this orchestrator. RC observes upstream
+// billing platforms (Stripe / App Store / Google Play); to seed RC sandbox data,
+// configure the RC sandbox to read from the same Stripe test mode account and
+// push to Stripe — RC will observe the events naturally. See README §Sandbox
+// setup for the one-time wiring.
 
 export type SeedRunOpts = {
   trainDays: number;
@@ -20,7 +22,6 @@ export type SeedRunOpts = {
   /** Anchor of the train window. Default: now − evalDays (so eval is "the future"). */
   start?: Date;
   enabled: EnabledSources;
-  rcConfig?: RevenueCatSeedConfig;
   stripeConfig?: StripeSeedConfig;
   sentryConfig?: SentrySeedConfig;
   posthogConfig?: PostHogSeedConfig;
@@ -51,8 +52,8 @@ export async function runSeed(opts: SeedRunOpts): Promise<SeedRunResult> {
     start_date: start,
   });
 
-  // Re-key user IDs and emails so RC/Stripe customers land under predictable
-  // seeded namespaces and we can clean them up reliably on re-runs.
+  // Re-key user IDs and emails so seeded customers land under predictable
+  // namespaces and we can clean them up reliably on re-runs.
   const userEmails: Record<string, string> = {};
   const events: Event[] = rawEvents.map((e) => {
     const newUid = `${SEED_PREFIX}${e.user_id.replace(/^user_/, "")}`;
@@ -84,7 +85,7 @@ export async function runSeed(opts: SeedRunOpts): Promise<SeedRunResult> {
     events: evalEvents,
   });
 
-  const perSource = await pushTrainToSources(opts, trainEvents, userEmails);
+  const perSource = await pushTrainToSources(opts, trainEvents, userEmails, start);
 
   return {
     total_events: events.length,
@@ -100,35 +101,31 @@ export async function runSeed(opts: SeedRunOpts): Promise<SeedRunResult> {
 export async function pushTrainToSources(
   opts: Pick<
     SeedRunOpts,
-    "enabled" | "rcConfig" | "stripeConfig" | "sentryConfig" | "posthogConfig" | "idempotentReset"
+    "enabled" | "stripeConfig" | "sentryConfig" | "posthogConfig" | "idempotentReset"
   >,
   events: Event[],
-  userEmails: Record<string, string>
+  userEmails: Record<string, string>,
+  syntheticStart?: Date
 ): Promise<SeedPushResult[]> {
   const out: SeedPushResult[] = [];
 
-  if (opts.enabled.revenuecat && opts.rcConfig) {
-    console.log(kleur.cyan(`   • RevenueCat: pushing customers + events...`));
-    try {
-      const r = await pushRevenueCatEvents(opts.rcConfig, events, userEmails, {
-        idempotentReset: opts.idempotentReset,
-      });
-      logResult(r);
-      out.push(r);
-    } catch (err) {
-      console.warn(
-        kleur.yellow(`     ⚠ RC push failed: ${err instanceof Error ? err.message : String(err)}`)
-      );
-    }
-  }
-
   if (opts.enabled.stripe && opts.stripeConfig) {
-    console.log(kleur.cyan(`   • Stripe (test mode): pushing customers + payment events...`));
+    console.log(
+      kleur.cyan(`   • Stripe (test mode + Test Clocks): pushing customers + subscriptions...`)
+    );
     try {
       const r = await pushStripeEvents(opts.stripeConfig, events, userEmails, {
         idempotentReset: opts.idempotentReset,
+        ...(syntheticStart ? { syntheticStart } : {}),
       });
       logResult(r);
+      if (r.test_clock_id) {
+        console.log(
+          kleur.dim(
+            `       test_clock=${r.test_clock_id} · final frozen_time=${r.final_frozen_time_iso ?? "—"}`
+          )
+        );
+      }
       out.push(r);
     } catch (err) {
       console.warn(
@@ -167,6 +164,14 @@ export async function pushTrainToSources(
         )
       );
     }
+  }
+
+  if (opts.enabled.revenuecat) {
+    console.log(
+      kleur.dim(
+        `   • RevenueCat: skipped (RC observes Stripe in sandbox; see README §Sandbox setup)`
+      )
+    );
   }
 
   return out;

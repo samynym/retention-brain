@@ -1,6 +1,6 @@
 import type { Event } from "@rcrb/core";
 import { fetchWithRetry } from "@rcrb/sources";
-import type { SeedPushResult } from "./revenuecat.js";
+import type { SeedPushResult } from "./types.js";
 
 // Sentry's /api/0/projects/.../store/ takes a DSN (not auth token). We use the
 // envelope endpoint directly with the project DSN if provided; otherwise we
