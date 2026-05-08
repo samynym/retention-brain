@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "./packages/core" },
-    { "path": "./packages/sources" }
+    { "path": "./packages/sources" },
+    { "path": "./packages/risk-engine" }
   ]
 }
