@@ -42,12 +42,11 @@ export function generate(opts: GenerateOpts): GenerateResult {
 
     // Decide churn: even within "will_churn" personas, only ~half actually churn
     const willActuallyChurn = persona.profile.will_churn && rng() < 0.5;
+    // Churners cancel in the last 45% of the window, with jitter.
+    // For days=30, this puts churn in [16, 29]. Keeps the decline trend
+    // visible and gives the late window enough non-churned activity.
     const churnDay = willActuallyChurn
-      ? Math.max(
-          5,
-          opts.days - (persona.profile.churn_window_days ?? 7) -
-            Math.floor(rng() * 5)
-        )
+      ? Math.floor(opts.days * 0.55 + rng() * opts.days * 0.4)
       : null;
 
     ground_truth.push({
@@ -103,14 +102,18 @@ export function generate(opts: GenerateOpts): GenerateResult {
         (persona.profile.sessions_trend - 1) *
           (d / Math.max(1, opts.days));
 
-      // Sessions today
+      // Sessions today, using stochastic rounding so low expected rates
+      // (e.g., 0.3 sessions/day) produce non-zero counts over time.
       const baselineDaily = persona.profile.sessions_per_week.mean / 7;
       const noise =
         (rng() - 0.5) * (persona.profile.sessions_per_week.sd / 7);
-      const sessionsToday = Math.max(
+      const expectedSessions = Math.max(
         0,
-        Math.round(baselineDaily * trendMult + noise)
+        baselineDaily * trendMult + noise
       );
+      const sessionsToday =
+        Math.floor(expectedSessions) +
+        (rng() < expectedSessions - Math.floor(expectedSessions) ? 1 : 0);
 
       for (let s = 0; s < sessionsToday; s++) {
         const ts = new Date(
