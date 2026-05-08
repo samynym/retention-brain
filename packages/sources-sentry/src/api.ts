@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { fetchWithRetry } from "@rcrb/sources";
 
 const DEFAULT_HOST = "https://sentry.io";
 
@@ -40,8 +41,8 @@ export const SentryEventDetail = z.object({
 });
 export type SentryEventDetail = z.infer<typeof SentryEventDetail>;
 
+// MAX_PAGES = 100 at 100 items/page = 10k issues — generous backfill ceiling
 const MAX_PAGES = 100;
-const MAX_429_RETRIES = 3;
 
 export function sentryApi(config: SentryConfig) {
   const host = config.host ?? DEFAULT_HOST;
@@ -51,22 +52,12 @@ export function sentryApi(config: SentryConfig) {
   };
 
   async function get(url: string): Promise<{ json: unknown; linkHeader: string | null }> {
-    for (let attempt = 0; attempt <= MAX_429_RETRIES; attempt++) {
-      const res = await fetch(url, { headers });
-      if (res.status === 429 && attempt < MAX_429_RETRIES) {
-        const retryAfter = Number(res.headers.get("retry-after"));
-        const waitMs =
-          Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000 * (attempt + 1);
-        await new Promise((r) => setTimeout(r, waitMs));
-        continue;
-      }
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        throw new Error(`Sentry ${res.status} ${res.statusText}: ${body}`);
-      }
-      return { json: await res.json(), linkHeader: res.headers.get("link") };
+    const res = await fetchWithRetry(url, { headers });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Sentry ${res.status} ${res.statusText}: ${body}`);
     }
-    throw new Error(`Sentry: exhausted ${MAX_429_RETRIES} retries on 429`);
+    return { json: await res.json(), linkHeader: res.headers.get("link") };
   }
 
   // Sentry pagination follows RFC 5988 Link headers shaped like:
