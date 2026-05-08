@@ -35,8 +35,9 @@ export const RCPurchase = z.object({
 });
 export type RCPurchase = z.infer<typeof RCPurchase>;
 
-// Synthesized "transaction" record that unifies subscription state-changes and one-off purchases
-// for mapping. RC v2 has no unified per-customer transaction feed, so backfill derives these.
+// RC v2 has no unified per-customer transaction feed, so backfill synthesizes
+// these from /subscriptions and /purchases. Mid-period RENEWAL and BILLING_ISSUE
+// only arrive via webhooks (mapWebhookEvent in webhook.ts).
 export type RCTransaction = {
   id: string;
   kind: "INITIAL_PURCHASE" | "EXPIRATION" | "NON_RENEWING_PURCHASE";
@@ -55,6 +56,9 @@ const ListResponse = z.object({
   next_page: z.string().nullable().optional(),
 });
 
+const MAX_PAGES = 1000;
+const MAX_429_RETRIES = 3;
+
 export function rcApi(config: RCConfig) {
   const headers = {
     Authorization: `Bearer ${config.apiKey}`,
@@ -63,25 +67,38 @@ export function rcApi(config: RCConfig) {
 
   async function get(path: string): Promise<unknown> {
     const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
-    const res = await fetch(url, { headers });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`RevenueCat ${res.status} ${res.statusText}: ${body}`);
+    for (let attempt = 0; attempt <= MAX_429_RETRIES; attempt++) {
+      const res = await fetch(url, { headers });
+      if (res.status === 429 && attempt < MAX_429_RETRIES) {
+        const retryAfter = Number(res.headers.get("retry-after"));
+        const waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000 * (attempt + 1);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`RevenueCat ${res.status} ${res.statusText}: ${body}`);
+      }
+      return res.json();
     }
-    return res.json();
+    throw new Error(`RevenueCat: exhausted ${MAX_429_RETRIES} retries on 429`);
   }
 
   async function* paginate<T>(initialPath: string, schema: z.ZodType<T>): AsyncIterable<T> {
     let next: string | null = initialPath;
+    const seen = new Set<string>();
+    let pages = 0;
     while (next) {
+      if (seen.has(next)) throw new Error(`RevenueCat pagination cycle detected at ${next}`);
+      if (++pages > MAX_PAGES) throw new Error(`RevenueCat pagination exceeded ${MAX_PAGES} pages`);
+      seen.add(next);
       const raw = await get(next);
       const parsed = ListResponse.parse(raw);
       for (const item of parsed.items) yield schema.parse(item);
-      // RC's next_page is a relative path like "/v2/projects/.../customers?starting_after=..."
       next = parsed.next_page
         ? parsed.next_page.startsWith("http")
           ? parsed.next_page
-          : `https://api.revenuecat.com${parsed.next_page}`
+          : `${BASE_URL.replace(/\/v2$/, "")}${parsed.next_page}`
         : null;
     }
   }

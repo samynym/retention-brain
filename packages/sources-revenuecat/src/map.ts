@@ -1,15 +1,6 @@
-import type { Event, EventKind } from "@rcrb/core";
+import type { Event } from "@rcrb/core";
 import type { RCCustomer, RCTransaction } from "./api.js";
-
-const KIND_MAP: Record<string, EventKind> = {
-  INITIAL_PURCHASE: "subscription.purchase",
-  RENEWAL: "subscription.renewal",
-  PRODUCT_CHANGE: "subscription.purchase",
-  CANCELLATION: "subscription.cancel",
-  EXPIRATION: "subscription.cancel",
-  BILLING_ISSUE: "payment.failure",
-  NON_RENEWING_PURCHASE: "subscription.purchase",
-};
+import { KIND_MAP } from "./kinds.js";
 
 function customerEmail(customer: RCCustomer): string | undefined {
   const attrs = customer.attributes;
