@@ -1,12 +1,4 @@
-// Inspect the synthetic simulator output. Run with:
-//   pnpm exec tsx scripts/inspect.ts
-//
-// Prints:
-//  1. Persona distribution
-//  2. Event counts by kind
-//  3. Actual churn rate per persona (vs configured)
-//  4. Session activity early vs late window per persona (trend visibility)
-//  5. A sample timeline for one user per persona
+// Inspect synthetic simulator output. Run: pnpm exec tsx scripts/inspect.ts
 
 import { syntheticSource } from "../packages/sources/src/synthetic/index.js";
 import { buildTimelines, type Event } from "../packages/core/src/index.js";
@@ -26,13 +18,16 @@ const src = syntheticSource({
   start_date: START,
 });
 
+// Reach back 60 days to include pre-window initial purchases
 const events: Event[] = [];
-for await (const e of src.backfill({ since: START, until: new Date(START.getTime() + DAYS * 86_400_000) })) {
+for await (const e of src.backfill({
+  since: new Date(START.getTime() - 60 * 86_400_000),
+  until: new Date(START.getTime() + DAYS * 86_400_000),
+})) {
   events.push(e);
 }
 const timelines = buildTimelines(events);
 
-// --- 1. Persona distribution ---
 console.log("--- 1. Persona distribution ---");
 const personaCounts = new Map<string, number>();
 for (const g of src.ground_truth) {
@@ -40,12 +35,14 @@ for (const g of src.ground_truth) {
 }
 const personaTable = [...personaCounts.entries()]
   .sort((a, b) => b[1] - a[1])
-  .map(([name, count]) => `  ${name.padEnd(20)} ${count.toString().padStart(4)}  (${((count / NUM_USERS) * 100).toFixed(1)}%)`)
+  .map(
+    ([name, count]) =>
+      `  ${name.padEnd(20)} ${count.toString().padStart(4)}  (${((count / NUM_USERS) * 100).toFixed(1)}%)`
+  )
   .join("\n");
 console.log(personaTable);
 console.log(`  total                ${NUM_USERS}`);
 
-// --- 2. Event counts by kind ---
 console.log("\n--- 2. Event counts by kind ---");
 const kindCounts = new Map<string, number>();
 for (const e of events) {
@@ -59,7 +56,6 @@ console.log(kindTable);
 console.log(`  total events                 ${events.length}`);
 console.log(`  avg events/user              ${(events.length / NUM_USERS).toFixed(1)}`);
 
-// --- 3. Actual churn rate per persona ---
 console.log("\n--- 3. Churn rate per persona ---");
 const churnByPersona = new Map<string, { total: number; churned: number }>();
 for (const g of src.ground_truth) {
@@ -77,7 +73,6 @@ const churnTable = [...churnByPersona.entries()]
   .join("\n");
 console.log(churnTable);
 
-// --- 4. Session activity early vs late window (trend visibility) ---
 console.log("\n--- 4. Sessions per persona: early window (days 0-6) vs late (days 23-29) ---");
 const personaByUser = new Map<string, string>();
 for (const g of src.ground_truth) personaByUser.set(g.user_id, g.persona);
@@ -109,7 +104,6 @@ const trendTable = [...personaCounts.keys()]
   .join("\n");
 console.log(trendTable);
 
-// --- 5. Sample timeline for one user per persona ---
 console.log("\n--- 5. Sample timeline (first user of each persona) ---");
 const sampledPersonas = new Set<string>();
 for (const g of src.ground_truth) {
@@ -117,7 +111,9 @@ for (const g of src.ground_truth) {
   sampledPersonas.add(g.persona);
   const tl = timelines.find((t) => t.user_id === g.user_id);
   if (!tl) continue;
-  console.log(`\n  user_id=${tl.user_id}  persona=${g.persona}  will_churn=${g.will_churn}${g.churn_at ? `  churn_at=${g.churn_at.slice(0, 10)}` : ""}`);
+  console.log(
+    `\n  user_id=${tl.user_id}  persona=${g.persona}  will_churn=${g.will_churn}${g.churn_at ? `  churn_at=${g.churn_at.slice(0, 10)}` : ""}`
+  );
   const counts = new Map<string, number>();
   for (const e of tl.events) counts.set(e.kind, (counts.get(e.kind) ?? 0) + 1);
   const summary = [...counts.entries()]

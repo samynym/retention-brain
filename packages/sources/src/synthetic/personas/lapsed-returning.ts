@@ -12,6 +12,6 @@ export const lapsed_returning: Persona = {
     will_churn: false,
     churn_window_days: null,
     churn_reason: null,
-    sessions_trend: 1.5, // recovering — by end of window, sessions are ~150% of start
+    sessions_trend: 1.5,
   },
 };

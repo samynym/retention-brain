@@ -11,8 +11,12 @@ export function syntheticSource(opts: GenerateOpts): SyntheticSource {
   return {
     name: "synthetic",
     ground_truth,
-    async *backfill() {
-      for (const e of events) yield e;
+    async *backfill({ since, until }) {
+      const sinceIso = since.toISOString();
+      const untilIso = until.toISOString();
+      for (const e of events) {
+        if (e.timestamp >= sinceIso && e.timestamp < untilIso) yield e;
+      }
     },
   };
 }
