@@ -1,0 +1,22 @@
+{
+  "name": "@rcrb/risk-engine",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@rcrb/core": "workspace:*",
+    "ai": "^5.0.0",
+    "@ai-sdk/anthropic": "^2.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@rcrb/sources": "workspace:*"
+  }
+}
