@@ -71,7 +71,7 @@ describe("revenuecat mapping", () => {
     ).toBeNull();
   });
 
-  it("verifyWebhook rejects bad bearer secrets without leaking length", () => {
+  it("verifyWebhook accepts matching bearer, rejects mismatches and empty", () => {
     expect(verifyWebhook("body", "shared-secret", "shared-secret")).toBe(true);
     expect(verifyWebhook("body", "wrong", "shared-secret")).toBe(false);
     expect(verifyWebhook("body", "", "shared-secret")).toBe(false);
@@ -100,7 +100,8 @@ describe.skipIf(!HAS_KEYS)("revenuecat source (live)", () => {
       events.push(e);
       if (events.length >= 5) break;
     }
-    expect(events.length).toBeGreaterThanOrEqual(0);
+    // Sandbox may be empty (events.length === 0 is fine). When events do come back,
+    // the loop body runs the real shape check.
     for (const e of events as Array<{ source: string; user_id: string; timestamp: string }>) {
       expect(e.source).toBe("revenuecat");
       expect(typeof e.user_id).toBe("string");
