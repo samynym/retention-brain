@@ -138,6 +138,18 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
 
+  packages/sources-sentry:
+    dependencies:
+      '@rcrb/core':
+        specifier: workspace:*
+        version: link:../core
+      '@rcrb/sources':
+        specifier: workspace:*
+        version: link:../sources
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+
   packages/sources-stripe:
     dependencies:
       '@rcrb/core':
