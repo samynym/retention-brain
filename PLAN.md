@@ -2025,14 +2025,15 @@ After all 4 connectors: add a top-level `packages/cli/src/commands/run.ts` that 
 
 ---
 
-## Phase 7: Briefing renderer + seed-sandbox
+## Phase 7: Briefing renderer + seed-sandbox + temporal holdout
 
-**Goal:** Two pieces that close the v1 user journey — the briefing the user actually reads, and the seed script that fills sandboxes with realistic users so the install can be validated end-to-end.
+**Goal:** Three pieces that close the v1 user journey — the briefing the user reads, the seed script that fills sandboxes for install validation, and the temporal-holdout eval that proves the brain works on real-API data without real users.
 
 **Files:**
-- Create: `packages/cli/src/commands/run.ts` (or extend it from Phase 6) — produces a markdown briefing
+- Create: `packages/cli/src/commands/run.ts` (or extend from Phase 6) — produces a markdown briefing; supports `--as-of <date>` cutoff
 - Create: `packages/cli/src/commands/watch.ts` — `--watch` mode polling sources every 60s
-- Create: `packages/cli/src/commands/seed-sandbox.ts` — populates RC + Stripe + (optional) Sentry + PostHog with ~50 realistic users
+- Create: `packages/cli/src/commands/seed-sandbox.ts` — populates RC + Stripe + (optional) Sentry + PostHog. Splits synthetic timeline into train + eval windows; pushes train, stages eval locally
+- Create: `packages/cli/src/commands/reveal-future.ts` — pushes the staged eval window to sandboxes, computes actual-vs-predicted metrics, prints temporal holdout report
 - Create: `packages/sources/src/synthetic/seed-real-sandbox.ts` — translates the synthetic generator into real-API calls
 - Update: `examples/briefing-sample.md` — committed canonical briefing example
 
@@ -2070,7 +2071,7 @@ After all 4 connectors: add a top-level `packages/cli/src/commands/run.ts` that 
 
 Every intervention includes the **evidence block** — raw events that produced the signals (David's "or I won't trust the email" critique).
 
-### `seed-sandbox` script
+### `seed-sandbox` script with temporal holdout
 
 Takes RC API key (+ Stripe test key + optional Sentry token + optional PostHog key), creates ~50 subscribers across the canonical persona shapes:
 
@@ -2078,18 +2079,47 @@ Takes RC API key (+ Stripe test key + optional Sentry token + optional PostHog k
 - ~10 wavering users (declining usage in real time)
 - ~7 lapsing users (cratering activity)
 - ~3 free-rider users (payment failures via Stripe test mode)
+- ~7 adversarial users (re_engagers, crashy_loyal, silent_lurkers)
 - (If Sentry token) throw realistic errors via Sentry SDK tied to specific user IDs
 - (If PostHog key) capture realistic event sequences via PostHog SDK
 
+**Temporal split:** flags `--train-days 30 --eval-days 30` produce a 60-day synthetic timeline. The first 30 days are pushed to the real sandboxes immediately. The latter 30 days (including any churn events) are staged locally to `./.staged-future.json`.
+
 Idempotent — re-runs delete previous seeded users (identified by `app_user_id` prefix `seed_`) and recreate. Documented as the canonical way to validate install before showing to others.
+
+### `reveal-future` command
+
+After running `seed-sandbox` and `run --as-of <cutoff>`, the user runs:
+
+```
+$ npx rc-retention-brain reveal-future
+✓ Pushed staged events (days 30-60) to RC, Stripe, Sentry, PostHog
+✓ Loading prior briefing (briefing-2026-01-31.md)
+✓ Computing actual-vs-predicted...
+
+📊 Temporal holdout result (cutoff 2026-01-31, eval window 30d):
+   Flagged at >=0.4: 21 users
+   Of those, actually churned in eval window: 15  (precision 71%)
+   Total churners in eval window: 19
+   Caught: 15 / 19  (recall 79%, F1 0.75)
+   Missed: 4 (their score was below threshold)
+
+   Intervention quality post-hoc:
+   - Users with email + 20% offer: 8/10 active at end (vs base ~30%)
+   - Users with no_op: 6/8 active (no intervention given)
+```
+
+This is the v1 hero metric. It's a temporal holdout — no peeking at future data. Real APIs, real-shape data, real outcomes against real predictions.
 
 ### Tasks
 
-- [ ] Implement `run.ts` command — reads `.env`, instantiates configured sources, builds timelines, scores, generates interventions, writes briefing markdown
+- [ ] Implement `run.ts` — reads `.env`, instantiates configured sources, builds timelines, scores, generates interventions, writes briefing markdown. `--as-of <ISO>` flag treats events at-or-before that date as the input window
 - [ ] Implement evidence-block rendering on each intervention
-- [ ] Implement `watch.ts` — polls non-webhook sources every 60s, sets up webhook listeners for sources that support them, prints events as they arrive
-- [ ] Implement `seed-sandbox.ts` — creates users in RC + Stripe + (Sentry + PostHog if keys), documents how to clean up
-- [ ] Commit `feat(cli): briefing renderer + seed-sandbox` and an example briefing in `examples/`
+- [ ] Implement `watch.ts` — polls non-webhook sources every 60s, sets up webhook listeners where supported
+- [ ] Implement `seed-sandbox.ts` — creates users in RC + Stripe + (Sentry + PostHog if keys); supports `--train-days` and `--eval-days`; stages future events to `.staged-future.json`
+- [ ] Implement `reveal-future.ts` — reads staged file, pushes events to sandboxes, reads back actual outcomes via real API calls, loads prior briefing's predictions, prints temporal holdout report
+- [ ] Save the canonical temporal-holdout output to `examples/temporal-holdout-sample.md`
+- [ ] Commit `feat(cli): briefing renderer + seed-sandbox + temporal holdout` with the example outputs in `examples/`
 
 **Resend channel + `--send` deferred to v1.1.** v1 ships briefing-only — installing v1 cannot, by design, send anything to your customers. This collapses the trust ask: the user reads briefings, edits the ones they don't like, manually copies into their existing email tool. Once that flow has been used for a month and trusted, v1.1 adds Resend dispatch with explicit `--send` opt-in.
 
