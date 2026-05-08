@@ -1,4 +1,4 @@
-#!/usr/bin/env -S npx tsx
+#!/usr/bin/env -S tsx
 
 import { Command } from "commander";
 import { runDemo } from "./commands/demo.js";
