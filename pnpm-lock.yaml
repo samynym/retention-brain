@@ -27,6 +27,28 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
 
+  packages/intervention-agent:
+    dependencies:
+      '@ai-sdk/anthropic':
+        specifier: ^2.0.0
+        version: 2.0.79(zod@3.25.76)
+      '@rcrb/core':
+        specifier: workspace:*
+        version: link:../core
+      '@rcrb/risk-engine':
+        specifier: workspace:*
+        version: link:../risk-engine
+      ai:
+        specifier: ^5.0.0
+        version: 5.0.185(zod@3.25.76)
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@rcrb/sources':
+        specifier: workspace:*
+        version: link:../sources
+
   packages/risk-engine:
     dependencies:
       '@ai-sdk/anthropic':

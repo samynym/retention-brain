@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/core" },
     { "path": "./packages/sources" },
-    { "path": "./packages/risk-engine" }
+    { "path": "./packages/risk-engine" },
+    { "path": "./packages/intervention-agent" }
   ]
 }
