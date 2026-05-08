@@ -55,12 +55,12 @@ describe("synthetic generate", () => {
     for (const g of ground_truth) {
       counts.set(g.persona, (counts.get(g.persona) ?? 0) + 1);
     }
-    // loyal weight = 0.30; allow ±5 percentage points
-    expect((counts.get("loyal") ?? 0) / 1000).toBeGreaterThan(0.25);
-    expect((counts.get("loyal") ?? 0) / 1000).toBeLessThan(0.35);
-    // lapsing weight = 0.10; allow ±5pp
+    // loyal weight = 0.30 / total 1.15 ≈ 0.26; allow ±5 percentage points
+    expect((counts.get("loyal") ?? 0) / 1000).toBeGreaterThan(0.22);
+    expect((counts.get("loyal") ?? 0) / 1000).toBeLessThan(0.32);
+    // lapsing weight = 0.10 / total 1.15 ≈ 0.087; allow ±5pp
     expect((counts.get("lapsing") ?? 0) / 1000).toBeGreaterThan(0.05);
-    expect((counts.get("lapsing") ?? 0) / 1000).toBeLessThan(0.15);
+    expect((counts.get("lapsing") ?? 0) / 1000).toBeLessThan(0.13);
   });
 
   it("declining-trend personas show fewer sessions late vs early in the window", () => {

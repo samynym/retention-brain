@@ -2,13 +2,14 @@ import type { UserTimeline } from "@rcrb/core";
 import type { Signal } from "./types.js";
 
 const DAY_MS = 86_400_000;
+const WEIGHT = 0.4;
 
 export function paymentHealth(timeline: UserTimeline, nowIso?: string): Signal {
   if (timeline.events.length === 0) {
     return {
       name: "payment_health",
       score: 0,
-      weight: 0.2,
+      weight: WEIGHT,
       reason: "No events in timeline.",
     };
   }
@@ -34,7 +35,7 @@ export function paymentHealth(timeline: UserTimeline, nowIso?: string): Signal {
     return {
       name: "payment_health",
       score: 0,
-      weight: 0.2,
+      weight: WEIGHT,
       reason: "No payment failure in the last 14 days.",
     };
   }
@@ -43,7 +44,7 @@ export function paymentHealth(timeline: UserTimeline, nowIso?: string): Signal {
     return {
       name: "payment_health",
       score: 0,
-      weight: 0.2,
+      weight: WEIGHT,
       reason: "Payment failure was recovered by a subsequent success.",
     };
   }
@@ -51,7 +52,7 @@ export function paymentHealth(timeline: UserTimeline, nowIso?: string): Signal {
   return {
     name: "payment_health",
     score: 0.9,
-    weight: 0.2,
+    weight: WEIGHT,
     reason: "Recent payment failure with no subsequent success.",
   };
 }

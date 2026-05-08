@@ -2,13 +2,14 @@ import type { UserTimeline } from "@rcrb/core";
 import type { Signal } from "./types.js";
 
 const DAY_MS = 86_400_000;
+const WEIGHT = 0.35;
 
 export function engagementRecency(timeline: UserTimeline, nowIso?: string): Signal {
   if (timeline.events.length === 0) {
     return {
       name: "engagement_recency",
       score: 0.7,
-      weight: 0.15,
+      weight: WEIGHT,
       reason: "No events in timeline.",
     };
   }
@@ -26,7 +27,7 @@ export function engagementRecency(timeline: UserTimeline, nowIso?: string): Sign
     return {
       name: "engagement_recency",
       score: 0.7,
-      weight: 0.15,
+      weight: WEIGHT,
       reason: "User has no usage sessions on record.",
     };
   }
@@ -44,7 +45,7 @@ export function engagementRecency(timeline: UserTimeline, nowIso?: string): Sign
   return {
     name: "engagement_recency",
     score,
-    weight: 0.15,
+    weight: WEIGHT,
     reason: `Last session ${daysSince.toFixed(1)} days ago.`,
   };
 }
