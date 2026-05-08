@@ -126,6 +126,18 @@ importers:
         specifier: ^3.0.8
         version: 3.0.8
 
+  packages/sources-revenuecat:
+    dependencies:
+      '@rcrb/core':
+        specifier: workspace:*
+        version: link:../core
+      '@rcrb/sources':
+        specifier: workspace:*
+        version: link:../sources
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+
 packages:
 
   '@ai-sdk/anthropic@2.0.79':
