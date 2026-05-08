@@ -3,14 +3,6 @@ import type { Signal } from "./types.js";
 
 const DAY_MS = 86_400_000;
 
-/**
- * Days since subscription.purchase event.
- * <30d → 0.3 (new, wobble normal)
- * 30-90d → 0.5 (early, watch closely)
- * 90-365d → 0.4 (established)
- * >365d → 0.2 (stable)
- * No purchase event → 0
- */
 export function lifecycleStage(timeline: UserTimeline, nowIso?: string): Signal {
   const purchase = timeline.events.find((e) => e.kind === "subscription.purchase");
   if (!purchase) {
@@ -19,14 +11,6 @@ export function lifecycleStage(timeline: UserTimeline, nowIso?: string): Signal 
       score: 0,
       weight: 0.1,
       reason: "No subscription.purchase event in timeline.",
-    };
-  }
-  if (timeline.events.length === 0) {
-    return {
-      name: "lifecycle_stage",
-      score: 0,
-      weight: 0.1,
-      reason: "No events in timeline.",
     };
   }
   const lastEvent = timeline.events[timeline.events.length - 1]!;

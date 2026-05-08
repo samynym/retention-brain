@@ -3,14 +3,6 @@ import type { Signal } from "./types.js";
 
 const DAY_MS = 86_400_000;
 
-/**
- * Days since last usage.session event.
- * >14d → 0.9
- * >7d → 0.6
- * >3d → 0.3
- * ≤3d → 0
- * No sessions ever → 0.7
- */
 export function engagementRecency(timeline: UserTimeline, nowIso?: string): Signal {
   if (timeline.events.length === 0) {
     return {
@@ -21,7 +13,6 @@ export function engagementRecency(timeline: UserTimeline, nowIso?: string): Sign
     };
   }
 
-  // Find the most recent session.
   let lastSessionMs: number | null = null;
   for (let i = timeline.events.length - 1; i >= 0; i--) {
     const e = timeline.events[i]!;
