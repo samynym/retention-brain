@@ -1,26 +1,19 @@
 # rc-retention-brain — Spec
 
-**Status:** Spec v2 · 2026-05-07
-**Pace:** Side project, ~6–7 weekends, no fixed deadline
-**Format:** Public open-source GitHub repo (MIT). No web demo, no Loom — the repo is the artifact.
-**Positioning:** A continuous, cross-source, per-user retention agent. Built for personal validation; **DM Jacob at v1.0** — when he can install it and run it on a real RC sandbox in under 10 minutes.
+**Status:** Spec v3 · 2026-05-08 (post-debate revision)
+**Pace:** Side project, ~5–6 weekends, no fixed deadline
+**Format:** Public open-source GitHub repo (MIT). No web demo, no Loom — the repo + a real briefing are the artifact.
+**Positioning:** A continuous, cross-source, per-user retention agent for subscription apps. Built for personal validation; **DM Jacob at v1.0** — when he can install it and run it on a real RC + Stripe sandbox in under 10 minutes and see a useful briefing.
 
 ---
 
 ## Thesis
 
-> *Rico is an excellent **analyst** — ask it about your churn, get a smart answer about your cohorts. The next layer of subscription intelligence isn't an analyst; it's an **operator**. A continuous, cross-source, per-user agent that watches your subscription business in real time and decides — for each at-risk user, individually — what to do.*
+> *Subscription dashboards tell you what happened. Retention agents decide what to do — per individual user, in real time, before they cancel.*
 
-Rico's four structural limits define the open territory:
+Even the best subscription tooling stops at metrics + cohort nudges. The next layer is an **operator**: a continuous, cross-source, per-user agent that watches your subscription business and decides — for each at-risk user, individually — channel, offer, timing, and copy. Approval gates while it learns trust; autonomous within guardrails when earned.
 
-| Rico does | The brain operator does |
-|---|---|
-| RC data only | Cross-source: RC + Stripe + Mixpanel + Intercom + Sentry |
-| Aggregate cohorts | Per-user, real-time |
-| Recommend only | Decides + (eventually) executes |
-| On-demand (you ask) | Continuous (it watches) |
-
-`rc-retention-brain` is that operator. v0 proves the architecture on synthetic data; v1 makes it real and installable.
+`rc-retention-brain` is that operator. v0 proves the architecture on synthetic data; v1 makes it real and installable on a real subscription stack (RC + Stripe + Sentry + PostHog).
 
 ## v1 = the DM bar
 
@@ -28,33 +21,39 @@ The DM is sent when v1 ships. v1 means Jacob can:
 
 ```
 $ npx rc-retention-brain init
-> Paste your RC sandbox API key:
-> Paste your Stripe sandbox key (optional, recommended):
-> Paste your Resend API key (optional, for --send):
+> Paste your RC API key (optional if Stripe is set):
+> Paste your Stripe API key (optional if RC is set):
+> Paste your Sentry auth token (optional, recommended):
+> Paste your PostHog personal API key (optional, recommended):
+> Paste your Resend API key (optional, only for v1.1 --send):
 
+$ npx rc-retention-brain seed-sandbox        # populates RC + Stripe sandboxes with realistic users
 $ npx rc-retention-brain run
-🧠 Reading RC events: 1,247 active subscribers, last 30d
-💳 Reading Stripe events: 1,247 customers matched, payment health computed
-📊 Risk engine: 73 users flagged at risk
-🤖 Intervention agent: generating plays for top 20…
+🧠 Reading subscription state: 1,247 subscribers from RC + Stripe
+🐞 Reading Sentry: 312 users with errors in last 14 days
+📊 Reading PostHog: 1,247 users matched, usage decline computed
+🧮 Risk engine: 73 users flagged at risk
+🤖 Intervention agent: generating briefings for top 20…
 
-→ Briefing written to ./briefing-2026-05-07.md
+→ Briefing written to ./briefing-2026-05-08.md
 → 20 intervention drafts in ./interventions/
-→ Run with --send to dispatch (default: dry-run)
+→ (v1 ships briefing-only. --send is v1.x.)
 ```
 
-In other words: clone, paste keys, run, get a real retention briefing on a real account in under 10 minutes. Anything less than that and the DM is premature.
+Clone, paste keys (you only need ≥1 of {RC, Stripe} to start), seed if needed, run, get a real retention briefing in <10 minutes. Sub-bar = DM is premature.
 
-**v1 must deliver on all four points of differentiation from Rico:**
+**v1 must deliver on four points of differentiation from existing subscription tooling:**
 
 | Differentiator | v1 implementation |
 |---|---|
 | Per-user (vs aggregate) | Risk + intervention generated per subscriber |
 | Continuous (vs on-demand) | `--watch` mode that polls events on schedule |
-| Cross-source (vs RC-only) | **7 sources:** RC, Stripe, Mixpanel, Sentry, Crisp, PostHog, Firebase Analytics + Crashlytics |
-| Action-oriented (vs recommend-only) | Resend connector with `--send`; default `--dry-run` |
+| Cross-source (vs single-tool) | **4 sources:** RC, Stripe, Sentry, PostHog (≥1 of {RC, Stripe} required; Sentry + PostHog optional) |
+| Decision-oriented (vs metrics-only) | Generates structured `Intervention` per user — channel, offer, timing, copy, reasoning |
 
-**Why 7 sources in v1, not 2:** With Claude Code doing the implementation autonomously, the cost-of-breadth argument is much weaker than for human-paced work. Each connector is ~1-3 hours of agent time. Going wide unlocks the genuine "this brain sees what no other tool sees" narrative — RC for subscriptions, Stripe for payment health, Mixpanel for usage decline, **Sentry for errors-as-churn-signal (the novel angle)**, Crisp for support sentiment, PostHog for indie-modern stack, Firebase for the Android/Firebase-only crowd.
+**Why 4 sources, not 7 or 1:** Each source provides an orthogonal signal dimension that no single tool sees together — RC/Stripe for subscription state, Sentry for errors-as-churn-signal (the novel angle), PostHog for usage decline. More than 4 is feature-list cosplay before any one of them is proven; fewer leaves obvious churn signals on the table. Source 5+ slot into the same `Source` interface in v1.x as the architecture earns trust.
+
+**Briefing-first, sending-later.** v1 ships the briefing path only — the agent generates structured `Intervention` objects, writes them to disk, prints the briefing. **No `--send` in v1.** Real email dispatch is v1.x once briefing trust is earned. This collapses the trust ask: installing v1 cannot, by design, send anything to your customers.
 
 ## What ships when
 
@@ -193,35 +192,44 @@ rc-retention-brain/
 
 ### v1 phase — real connectors + ship (autonomous Claude execution)
 
-Time estimates are now in **agent-hours**, not weekends. With autonomous CC sessions and accounts/keys provisioned upfront, this is plausibly 2-3 focused weekends total wall-clock.
+Time in **agent-hours**, not weekends. Plausibly 2-3 focused weekends wall-clock, including key provisioning and seed-sandbox setup.
 
-**Phase A — Connector foundation (~3-4 agent-hrs)**
-- Generic `Source` interface and `Channel` interface
-- Synthetic source kept as canonical reference implementation
-- User matching strategy module (email-primary with `app_user_id` metadata fallback, configurable)
+**Phase 5.5 — Eval methodology fixes (~3-4 agent-hrs)**
 
-**Phase B — All 7 source connectors (~12-18 agent-hrs total, ~1.5-3 hrs each)**
-1. **RevenueCat** — REST API + webhook listener. Subscribers, transactions, entitlements, charts data
+The post-v0 debate flagged the eval as the weakest link. Fix before adding real connectors so v1 has trustworthy numbers:
+- **Train/eval seed split** — different seeds for tuning weights vs. reporting numbers
+- **Pre-registered thresholds** — drop the median-of-churners threshold pick; assert at fixed thresholds (0.4, 0.5, 0.6) and report all of them
+- **Adversarial personas** added to simulator (re-engagers who look lapsing then return; happy users who happen to crash a lot) so signals can't trivially match generator parameters
+- **Critic uses a different model than composer** in eval mode, OR ensemble of two models — to break the Sonnet-judges-Sonnet closed loop
+- **Surface critic verdict on `Intervention`** — not just `console.warn`, so eval can correlate critic accept-rate with downstream signals
+- **LLM judge availability tracked** as an explicit field on `RiskScore`, not silently substituted to 0 on error
+
+**Phase 6 — Connector foundation + 4 real source connectors (~10-14 agent-hrs)**
+
+Generic `Source` interface (already exists). User matching strategy module (email-primary with `app_user_id` metadata fallback). Then 4 connectors:
+
+1. **RevenueCat** — REST API + webhook listener. Subscribers, transactions, entitlements
 2. **Stripe** — REST + webhook. Customers, subscriptions, invoices, charge.failed, payment_method events
-3. **Mixpanel** — Engage API for user profiles + Events Export for behavior. Activity decline = primary signal
-4. **Sentry** — Issues API + user-tied events. *Novel angle: errors as per-user churn predictor*
-5. **Crisp** — Conversations API. Sentiment derived from message content via LLM
-6. **PostHog** — Persons API + Events. Activity + funnel signal (alternative to Mixpanel for that crowd)
-7. **Firebase Analytics + Crashlytics** — BigQuery export for both. Android-heavy / Firebase-only coverage
+3. **Sentry** — Issues API + user-tied events. *Novel angle: errors as per-user churn predictor*
+4. **PostHog** — Persons API + Events. Activity decline + engagement recency
+
+Constraint: ≥1 of {RC, Stripe} must be configured at runtime. Sentry + PostHog are pure-optional. CLI prints clear errors if no subscription source is wired.
 
 Each connector ships with: API client, webhook listener (where applicable), event schema mapper, user matcher, smoke test, README section.
 
-**Phase C — Resend channel + `--send`/`--dry-run` (~2 agent-hrs)**
-- Transform `Intervention` → email payload
-- `--dry-run` writes interventions to `./interventions/*.json`
-- `--send` requires explicit flag + Resend test mode default
+**Phase 7 — Briefing renderer + seed-sandbox (~3-4 agent-hrs)**
 
-**Phase D — Install polish + DM-readiness (~3-5 agent-hrs)**
+- `npx rc-retention-brain run` writes `briefing-<date>.md` (markdown briefing the user reads)
+- `npx rc-retention-brain seed-sandbox` populates an RC sandbox + Stripe test mode + (optional) Sentry + PostHog with ~50 realistic users so install can be validated end-to-end without a real app
+- `--watch` mode for continuous polling of webhook-friendly sources
+
+**No `--send` channel in v1.** Resend connector is deferred to v1.x. Briefing-first is the trust ask v1 makes.
+
+**Phase 8 — Install polish + DM-readiness (~3-5 agent-hrs)**
 - `npx rc-retention-brain init` — interactive key paste, writes `.env`
-- `--watch` mode tested in real time
-- README rewritten install-first; thesis paragraph 2
-- End-to-end smoke against your real (or borrowed) sandbox accounts
-- Eval suite green on synthetic + spot-check on real
+- README rewritten — install-first paragraph, real briefing screenshot embedded, thesis paragraph 2
+- Screen recording from `git clone` to first real briefing on a clean machine + fresh sandbox — under 10 minutes, otherwise fix install before DM
+- Eval suite green on synthetic + spot-check on the seeded sandbox
 - DM drafted, sleep on it, send
 
 The eval suite + rubric carry through every phase — no phase ships without passing evals.
@@ -230,21 +238,26 @@ The eval suite + rubric carry through every phase — no phase ships without pas
 
 | Stage | Data source | Goal |
 |---|---|---|
-| v0 | Synthetic stream | Prove the architecture; pass eval bars |
-| v1.0 | Your own / borrowed RC sandbox + Stripe sandbox | Real data, real briefing, install-and-go in <10 min — **DM trigger** |
-| v1.1+ | Real production app (yours or a friend's) | Real users, real outcomes |
+| v0 ✅ | Synthetic stream | Prove the architecture; pass eval bars |
+| v0.5 (Phase 5.5) | Synthetic + adversarial personas, seed-split | Trustworthy eval methodology before real data |
+| v1.0 | RC sandbox + Stripe test + Sentry + PostHog, seeded with ~50 realistic users | Real-API briefing, install-and-go in <10 min — **DM trigger** |
+| v1.1+ | Real production app (yours or a friend's via outreach) | Real users, real outcomes |
 
-The contract layer (normalized `Event` and `Intervention` types) is shaped to match real RC webhook + Stripe event payloads from day 1, so the v0 → v1 transition is "swap the source," not a rewrite.
+**Path A (locked):** Sandbox-only validation for v1. The seed-sandbox script populates real RC/Stripe/Sentry/PostHog sandboxes with realistic events; the brain runs against real APIs. This proves install + connectors + briefing format on real systems. It does not prove real-world signal quality — that's v1.1+ when real-app data appears.
+
+The contract layer (normalized `Event` and `Intervention` types) matches real RC webhook + Stripe event payloads, so the v0 → v1 transition is "swap source," not a rewrite.
 
 ## Roadmap
 
-- **v0** — Synthetic-only, four pillars, CLI demo, evals
-- **v1.0 — DM trigger.** All 7 sources (RC, Stripe, Mixpanel, Sentry, Crisp, PostHog, Firebase). Resend channel for action. `--watch` continuous mode. Install in <10 min.
-- **v1.1** — Additional channels: OneSignal push, custom webhook for in-app messaging
-- **v1.2** — Amplitude connector (Mixpanel alternative for that crowd)
-- **v1.3** — Intercom connector (Crisp alternative for larger teams)
-- **v1.4** — App reviews source (AppFollow / Appfigures) — review sentiment as churn signal
-- **v1.5** — Outcome learning loop (track intervention → outcome → refine rubric over time)
+- **v0** ✅ — Synthetic-only, four pillars, CLI demo, evals
+- **v0.5** — Eval methodology fixes (seed split, adversarial personas, pre-registered thresholds, non-self-judging critic)
+- **v1.0 — DM trigger.** 4 sources (RC, Stripe, Sentry, PostHog), ≥1 of {RC, Stripe} required. Briefing-only (no send). `--watch` mode. seed-sandbox script. Install in <10 min on sandboxes.
+- **v1.1** — Resend channel + `--send` (briefing-trust-earned upgrade)
+- **v1.2** — Mixpanel / Amplitude connector (PostHog alternative)
+- **v1.3** — Crisp / Intercom connector (support sentiment)
+- **v1.4** — Firebase Analytics + Crashlytics (Android/Firebase-only coverage)
+- **v1.5** — App reviews source (AppFollow / Appfigures) + OneSignal push channel
+- **v1.6** — Outcome learning loop (track intervention → outcome → refine rubric)
 - **v2.0** — Hostable as a service (only if real users emerge)
 
 ## Why open source
