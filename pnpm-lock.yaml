@@ -44,18 +44,6 @@ importers:
       '@rcrb/sources-mcp':
         specifier: workspace:*
         version: link:../sources-mcp
-      '@rcrb/sources-posthog':
-        specifier: workspace:*
-        version: link:../sources-posthog
-      '@rcrb/sources-revenuecat':
-        specifier: workspace:*
-        version: link:../sources-revenuecat
-      '@rcrb/sources-sentry':
-        specifier: workspace:*
-        version: link:../sources-sentry
-      '@rcrb/sources-stripe':
-        specifier: workspace:*
-        version: link:../sources-stripe
       commander:
         specifier: ^12.1.0
         version: 12.1.0
@@ -65,9 +53,6 @@ importers:
       kleur:
         specifier: ^4.1.5
         version: 4.1.5
-      stripe:
-        specifier: ^17.0.0
-        version: 17.7.0
       tsx:
         specifier: ^4.19.0
         version: 4.21.0
@@ -170,54 +155,6 @@ importers:
       zod:
         specifier: ^3.23.0
         version: 3.25.76
-
-  packages/sources-posthog:
-    dependencies:
-      '@rcrb/core':
-        specifier: workspace:*
-        version: link:../core
-      '@rcrb/sources':
-        specifier: workspace:*
-        version: link:../sources
-      zod:
-        specifier: ^3.23.0
-        version: 3.25.76
-
-  packages/sources-revenuecat:
-    dependencies:
-      '@rcrb/core':
-        specifier: workspace:*
-        version: link:../core
-      '@rcrb/sources':
-        specifier: workspace:*
-        version: link:../sources
-      zod:
-        specifier: ^3.23.0
-        version: 3.25.76
-
-  packages/sources-sentry:
-    dependencies:
-      '@rcrb/core':
-        specifier: workspace:*
-        version: link:../core
-      '@rcrb/sources':
-        specifier: workspace:*
-        version: link:../sources
-      zod:
-        specifier: ^3.23.0
-        version: 3.25.76
-
-  packages/sources-stripe:
-    dependencies:
-      '@rcrb/core':
-        specifier: workspace:*
-        version: link:../core
-      '@rcrb/sources':
-        specifier: workspace:*
-        version: link:../sources
-      stripe:
-        specifier: ^17.0.0
-        version: 17.7.0
 
 packages:
 
@@ -1333,10 +1270,6 @@ packages:
   std-env@3.10.0:
     resolution: {integrity: sha512-5GS12FdOZNliM5mAOxFRg7Ir0pWz8MdpYm6AY6VPkGpbA7ZzmbzNcBJQ0GPvvyWgcY7QAhCgf9Uy89I03faLkg==}
 
-  stripe@17.7.0:
-    resolution: {integrity: sha512-aT2BU9KkizY9SATf14WhhYVv2uOapBWX0OFWF4xvcj1mPaNotlSc2CsxpS4DS46ZueSppmCF5BX1sNYBtwBvfw==}
-    engines: {node: '>=12.*'}
-
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
 
@@ -2446,11 +2379,6 @@ snapshots:
   statuses@2.0.2: {}
 
   std-env@3.10.0: {}
-
-  stripe@17.7.0:
-    dependencies:
-      '@types/node': 22.19.17
-      qs: 6.15.1
 
   tinybench@2.9.0: {}
 

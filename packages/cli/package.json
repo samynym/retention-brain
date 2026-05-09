@@ -16,14 +16,9 @@
     "@rcrb/risk-engine": "workspace:*",
     "@rcrb/sources": "workspace:*",
     "@rcrb/sources-mcp": "workspace:*",
-    "@rcrb/sources-posthog": "workspace:*",
-    "@rcrb/sources-revenuecat": "workspace:*",
-    "@rcrb/sources-sentry": "workspace:*",
-    "@rcrb/sources-stripe": "workspace:*",
     "commander": "^12.1.0",
     "dotenv": "^16.4.5",
     "kleur": "^4.1.5",
-    "stripe": "^17.0.0",
     "tsx": "^4.19.0"
   }
 }
