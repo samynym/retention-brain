@@ -1,6 +1,6 @@
 import kleur from "kleur";
 import { syntheticSource } from "@rcrb/sources/synthetic";
-import { buildTimelines, type Event } from "@rcrb/core";
+import { buildTimelines, hasLLMKey, type Event } from "@rcrb/core";
 import { scoreAll } from "@rcrb/risk-engine";
 import { generateAll } from "@rcrb/intervention-agent";
 import { evalPredictions } from "@rcrb/eval";
@@ -54,7 +54,7 @@ export async function runDemo(opts: { users: string; days: string; seed: string 
     console.log(`   • Top signals: ${sigSummary}`);
   }
 
-  if (flagged.length > 0 && process.env.ANTHROPIC_API_KEY) {
+  if (flagged.length > 0 && hasLLMKey()) {
     console.log(kleur.cyan(`🤖 Intervention Agent: generating plays for top 5...`));
     const tlByUser = new Map(timelines.map((t) => [t.user_id, t]));
     const interventions = await generateAll(scores, tlByUser, { threshold: DEMO_THRESHOLD, max: 5 });
@@ -70,8 +70,8 @@ export async function runDemo(opts: { users: string; days: string; seed: string 
       if (i.copy.subject) console.log(`  Subject: ${i.copy.subject}`);
       console.log(`  Body: ${i.copy.body.slice(0, 200)}${i.copy.body.length > 200 ? "..." : ""}`);
     }
-  } else if (!process.env.ANTHROPIC_API_KEY) {
-    console.log(kleur.dim(`(set ANTHROPIC_API_KEY to generate interventions — e.g. export ANTHROPIC_API_KEY=sk-ant-...)`));
+  } else if (!hasLLMKey()) {
+    console.log(kleur.dim(`(set ANTHROPIC_API_KEY or OPENAI_API_KEY to generate interventions)`));
   }
 
   console.log("");

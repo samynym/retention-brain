@@ -1,7 +1,6 @@
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
-import { MODEL_ID } from "@rcrb/core";
+import { getModel } from "@rcrb/core";
 import type { RiskScore } from "@rcrb/risk-engine";
 import { formatTopSignals } from "./prompts.js";
 
@@ -14,7 +13,7 @@ export type ChannelDecision = z.infer<typeof Schema>;
 
 export async function decideChannel(risk: RiskScore): Promise<ChannelDecision> {
   const { object } = await generateObject({
-    model: anthropic(MODEL_ID),
+    model: getModel("structured"),
     schema: Schema,
     system:
       "You pick the right outreach channel for an at-risk subscription user. " +

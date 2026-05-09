@@ -1,4 +1,4 @@
-import type { Intervention } from "@rcrb/core";
+import { getModelId, type Intervention } from "@rcrb/core";
 import { critique, type Critique } from "@rcrb/intervention-agent";
 
 export type InterventionEval = {
@@ -15,8 +15,8 @@ const ZERO: InterventionEval = {
 
 const CRITIQUE_CONCURRENCY = 5;
 
-// Use Opus to break the Sonnet-judges-Sonnet closed loop in eval mode.
-const EVAL_CRITIC_MODEL = "claude-opus-4-7";
+// Use a stronger/different model than the generator to break the self-judging loop in eval mode.
+// Resolves per-provider (Anthropic → opus, OpenAI → gpt-5) or LLM_CRITIC_MODEL override.
 
 export async function evalInterventions(interventions: Intervention[]): Promise<InterventionEval> {
   if (interventions.length === 0) return ZERO;
@@ -28,7 +28,7 @@ export async function evalInterventions(interventions: Intervention[]): Promise<
     const results = await Promise.all(
       chunk.map(async (intv): Promise<Critique | null> => {
         try {
-          return await critique(intv, { model: EVAL_CRITIC_MODEL });
+          return await critique(intv, { model: getModelId("critic") });
         } catch (err) {
           console.warn(
             `[eval] critique failed for ${intv.user_id}: ${err instanceof Error ? err.message : String(err)}`

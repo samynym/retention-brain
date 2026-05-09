@@ -30,3 +30,13 @@ export async function readStaged(): Promise<StagedFile> {
   }
   return JSON.parse(raw) as StagedFile;
 }
+
+/** Returns null if the staged file doesn't exist or can't be parsed. */
+export async function tryReadStaged(): Promise<StagedFile | null> {
+  try {
+    const raw = await readFile(STAGED_PATH, "utf8");
+    return JSON.parse(raw) as StagedFile;
+  } catch {
+    return null;
+  }
+}
