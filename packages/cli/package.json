@@ -15,6 +15,7 @@
     "@rcrb/intervention-agent": "workspace:*",
     "@rcrb/risk-engine": "workspace:*",
     "@rcrb/sources": "workspace:*",
+    "@rcrb/sources-mcp": "workspace:*",
     "@rcrb/sources-posthog": "workspace:*",
     "@rcrb/sources-revenuecat": "workspace:*",
     "@rcrb/sources-sentry": "workspace:*",
