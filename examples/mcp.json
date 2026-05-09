@@ -1,47 +1,64 @@
 {
-  "$schema": "https://example.com/rcrb-mcp.schema.json",
-  "_comment": "Example .rcrb/mcp.json wiring four canonical retention data sources via their MCP servers. Every command/url/tool below is a placeholder — replace with the actual values for the MCP server you've installed. The point: this file is the entire surface area for adding a new source. No code changes needed.",
+  "_comment": "Real MCP wiring grounded in vendor docs as of 2026-05-09. Two of four canonical sources (RevenueCat, Stripe) ship MCPs that are configuration-focused and DO NOT expose a date-range events list. We document the gap rather than fake a tool name. PostHog and Sentry both support what we need.",
+  "_caveats": {
+    "revenuecat": "Official MCP at mcp.revenuecat.ai exposes list-customer-* tools but no batch events-by-date-range endpoint. For real backfill, supplement with webhooks. The entry below targets list-customer-purchases per app_user_id and assumes you already know which users to look up — useful for the per-user retention loop but not for cold backfill.",
+    "stripe": "Official MCP (npx @stripe/mcp) exposes list_subscriptions, list_customers, list_invoices, list_disputes etc. but no list_events / events.list equivalent. The entry below pulls subscription state changes; payment failures and refunds will need a separate REST/webhook path until Stripe adds events to the MCP."
+  },
   "sources": [
     {
       "label": "subscriptions",
-      "_about": "RevenueCat — subscription lifecycle (purchases, renewals, cancellations, refunds).",
-      "command": "<launch command for the RC MCP, e.g. npx>",
-      "args": ["<args>", "<for the RC MCP server>"],
-      "tool": "<tool name that lists customer events>",
+      "_about": "RevenueCat — per-customer purchase history. Limitation: not a batch backfill; lists purchases for one app_user_id at a time. Set MCP_SUBSCRIPTIONS_ARGS in your env (or args below) to the user_id you want to inspect, OR write a wrapper that fans out across users. For full lifecycle coverage prefer RC webhooks.",
+      "url": "https://mcp.revenuecat.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer ${REVENUECAT_API_V2_SECRET_KEY}"
+      },
+      "tool": "list-customer-purchases",
+      "toolArgs": {
+        "app_user_id": "<replace with the user id you want, or remove and call iteratively>"
+      },
       "mapper": "llm",
-      "hint": "RevenueCat customer events. user_id should be the app user id (not the RC subscriber id).",
-      "passDateRange": true
+      "hint": "RevenueCat per-customer purchase history. user_id should map from app_user_id (NOT from the RC subscriber id). Fields commonly seen: app_user_id, purchased_at (ISO), product_id, store. Map purchases to subscription.purchase, missing renewals/cancels won't be in this stream — they live on the subscription object.",
+      "passDateRange": false
     },
     {
       "label": "billing",
-      "_about": "Stripe — payment success/failure, customer cancellations, refunds.",
-      "command": "<launch command for the Stripe MCP>",
-      "args": ["<args>"],
-      "tool": "<tool name that lists Stripe events>",
+      "_about": "Stripe — subscription state. Limitation: official MCP has no list_events tool, so payment.failure/charge.refunded events are NOT reachable via this entry. We pull list_subscriptions to catch active/canceled state; supplement with webhooks for full payment lifecycle.",
+      "command": "npx",
+      "args": ["-y", "@stripe/mcp@latest", "--api-key=${STRIPE_SECRET_KEY}"],
+      "tool": "list_subscriptions",
       "mapper": "llm",
-      "hint": "Stripe events. Resolve the customer's app_user_id from customer.metadata.app_user_id when available; otherwise fall back to email."
+      "hint": "Stripe Subscription objects. user_id should be resolved from customer.metadata.app_user_id when present; if you've configured the MCP server with a fixed customer_id arg, use that instead. Map status=active recent → subscription.purchase or subscription.renewal, status=canceled → subscription.cancel. Use created (Unix seconds) or current_period_start for the timestamp.",
+      "passDateRange": false
     },
     {
       "label": "engagement",
-      "_about": "PostHog — session activity, feature usage.",
-      "command": "<launch command for the PostHog MCP>",
-      "args": ["<args>"],
-      "tool": "<tool name that returns events>",
-      "mapper": "config",
-      "mapping": {
-        "user_id": "$.properties.app_user_id",
-        "timestamp": "$.timestamp",
-        "kind": "usage.session"
-      }
+      "_about": "PostHog — raw event stream via HogQL. This works as designed. The args.query below pulls the last 60 days of session events; tweak the WHERE clause if you also want custom usage events. The MCP returns rows; the LLM normalizer maps each row to user_id/timestamp/kind.",
+      "url": "https://mcp.posthog.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${POSTHOG_PERSONAL_API_KEY}"
+      },
+      "tool": "execute-sql",
+      "toolArgs": {
+        "query": "SELECT distinct_id, properties.app_user_id AS app_user_id, event, timestamp, properties FROM events WHERE event IN ('$session_start', '$pageview') AND timestamp >= now() - INTERVAL 60 DAY ORDER BY timestamp DESC LIMIT 10000"
+      },
+      "mapper": "llm",
+      "hint": "PostHog HogQL rows. user_id should be properties.app_user_id when present, else distinct_id. timestamp is ISO. Map event='$session_start' to usage.session, '$pageview' or any custom name to usage.feature. Skip $identify/$set rows.",
+      "passDateRange": false
     },
     {
       "label": "errors",
-      "_about": "Sentry — crash and client errors per user.",
-      "url": "<HTTP URL of the Sentry MCP, if you use the hosted one>",
-      "headers": { "Authorization": "Bearer <SENTRY_MCP_TOKEN>" },
-      "tool": "<tool name>",
+      "_about": "Sentry — error/crash events via the hosted MCP (OAuth handshake handled by the MCP client). The search_events tool with dataset='errors' returns per-event records with user context.",
+      "url": "https://mcp.sentry.dev/mcp",
+      "tool": "search_events",
+      "toolArgs": {
+        "dataset": "errors",
+        "query": "level:[error,fatal] has:user.id",
+        "statsPeriod": "60d",
+        "limit": 1000
+      },
       "mapper": "llm",
-      "hint": "Sentry issues. user_id should be the app user id from the issue's user context."
+      "hint": "Sentry events. user_id from user.id (fall back to user.email or user.username). timestamp is ISO. Map level='fatal' OR exception.values[].mechanism.handled=false to error.crash; level='error' to error.client. Skip events without a user identifier.",
+      "passDateRange": false
     }
   ]
 }
