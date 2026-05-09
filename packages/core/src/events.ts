@@ -30,6 +30,7 @@ export const EventSource = z.enum([
   "crisp",
   "posthog",
   "firebase",
+  "mcp",
 ]);
 export type EventSource = z.infer<typeof EventSource>;
 

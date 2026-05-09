@@ -38,8 +38,8 @@ export async function runSeedSandbox(opts: {
   const idempotentReset = opts.reset !== false;
 
   const enabledNames = Object.entries(bundle.enabled)
-    .filter(([, v]) => v)
-    .map(([k]) => k);
+    .filter(([, v]) => (Array.isArray(v) ? v.length > 0 : !!v))
+    .map(([k, v]) => (Array.isArray(v) ? v.map((label) => `${k}:${label}`).join(",") : k));
   console.log(
     kleur.cyan().bold(
       `🌱 Seeding ${enabledNames.join(", ")} with ${users} users · ${trainDays}d train + ${evalDays}d eval`

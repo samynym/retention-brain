@@ -3,12 +3,14 @@ import { revenueCatSource } from "@rcrb/sources-revenuecat";
 import { stripeSource } from "@rcrb/sources-stripe";
 import { sentrySource } from "@rcrb/sources-sentry";
 import { postHogSource } from "@rcrb/sources-posthog";
+import { loadMCPSources, mcpSource, type LoadedMCPSource } from "@rcrb/sources-mcp";
 
 export type EnabledSources = {
   revenuecat: boolean;
   stripe: boolean;
   sentry: boolean;
   posthog: boolean;
+  mcp: string[];
 };
 
 export type SourceBundle = {
@@ -25,13 +27,17 @@ export class NoSubscriptionSourceError extends Error {
   }
 }
 
-export function loadSourcesFromEnv(env: NodeJS.ProcessEnv = process.env): SourceBundle {
+export function loadSourcesFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  cwd: string = process.cwd()
+): SourceBundle {
   const sources: Source[] = [];
   const enabled: EnabledSources = {
     revenuecat: false,
     stripe: false,
     sentry: false,
     posthog: false,
+    mcp: [],
   };
 
   if (env.REVENUECAT_API_KEY && env.REVENUECAT_PROJECT_ID) {
@@ -68,6 +74,12 @@ export function loadSourcesFromEnv(env: NodeJS.ProcessEnv = process.env): Source
     if (env.POSTHOG_HOST) cfg.host = env.POSTHOG_HOST;
     sources.push(postHogSource(cfg));
     enabled.posthog = true;
+  }
+
+  const mcpEntries: LoadedMCPSource[] = loadMCPSources({ cwd, env });
+  for (const entry of mcpEntries) {
+    sources.push(mcpSource(entry));
+    enabled.mcp.push(entry.label);
   }
 
   if (!enabled.revenuecat && !enabled.stripe) {
