@@ -4,8 +4,9 @@ import { resolve } from "node:path";
 import kleur from "kleur";
 import type { Event } from "@rcrb/core";
 import { loadSourcesFromEnv, NoSubscriptionSourceError } from "../source-config.js";
-import { pushTrainToSources } from "../seed/index.js";
-import { advanceLatestSeedClockTo } from "../seed/stripe.js";
+import { advanceAllSeedClocksTo, pushEvalEventsToStripe } from "../seed/stripe.js";
+import { pushSentryEvents } from "../seed/sentry.js";
+import { pushPostHogEvents } from "../seed/posthog.js";
 import { readStaged } from "../seed/staged.js";
 
 export async function runRevealFuture(): Promise<void> {
@@ -30,45 +31,98 @@ export async function runRevealFuture(): Promise<void> {
   const evalSince = new Date(staged.cutoff_iso);
   const evalUntil = new Date(staged.eval_until_iso);
 
-  const pushOpts: Parameters<typeof pushTrainToSources>[0] = {
-    enabled: bundle.enabled,
-    idempotentReset: false,
-  };
+  // Push eval-window events to existing seeded sandbox state. Critical: this
+  // does NOT call pushTrainToSources because that would create new customers +
+  // new test clocks, contaminating the eval window. Instead:
+  //   • Stripe: look up existing seed customers by metadata, apply cancels +
+  //     PM swaps to them. Each API call fires at wall-clock-of-reveal, after
+  //     the seed's wall-clock cutoff, so the events land in eval backfill.
+  //   • PostHog: capture eval events with their synthetic timestamps preserved
+  //     via historical_migration.
+  //   • Sentry: same — push synthetic-timestamped error events.
   if (bundle.enabled.stripe) {
-    pushOpts.stripeConfig = { apiKey: process.env.STRIPE_API_KEY! };
+    console.log(kleur.cyan(`   • Stripe: applying eval cancels/payment failures to existing customers...`));
+    try {
+      const r = await pushEvalEventsToStripe(
+        { apiKey: process.env.STRIPE_API_KEY! },
+        staged.events
+      );
+      console.log(
+        kleur.dim(
+          `     ✓ stripe: ${r.cancels_pushed} cancels · ${r.payment_failures_pushed} payment failures · ${r.events_skipped} skipped`
+        )
+      );
+      for (const note of r.notes) {
+        console.log(kleur.dim(`       note: ${note}`));
+      }
+    } catch (err) {
+      console.warn(
+        kleur.yellow(
+          `     ⚠ Stripe eval push failed: ${err instanceof Error ? err.message : String(err)}`
+        )
+      );
+    }
   }
-  if (bundle.enabled.sentry) {
-    pushOpts.sentryConfig = {
-      ...(process.env.SENTRY_DSN ? { dsn: process.env.SENTRY_DSN } : {}),
-      ...(process.env.SENTRY_AUTH_TOKEN ? { authToken: process.env.SENTRY_AUTH_TOKEN } : {}),
-      ...(process.env.SENTRY_ORG_SLUG ? { orgSlug: process.env.SENTRY_ORG_SLUG } : {}),
-      ...(process.env.SENTRY_PROJECT_SLUG ? { projectSlug: process.env.SENTRY_PROJECT_SLUG } : {}),
-    };
-  }
+
   if (bundle.enabled.posthog && process.env.POSTHOG_PROJECT_API_KEY) {
-    const phCfg: { projectApiKey: string; host?: string } = {
-      projectApiKey: process.env.POSTHOG_PROJECT_API_KEY,
-    };
-    if (process.env.POSTHOG_HOST) phCfg.host = process.env.POSTHOG_HOST;
-    pushOpts.posthogConfig = phCfg;
+    console.log(kleur.cyan(`   • PostHog: capturing eval events...`));
+    try {
+      const phCfg: { projectApiKey: string; host?: string } = {
+        projectApiKey: process.env.POSTHOG_PROJECT_API_KEY,
+      };
+      if (process.env.POSTHOG_HOST) phCfg.host = process.env.POSTHOG_HOST;
+      const r = await pushPostHogEvents(phCfg, staged.events);
+      console.log(
+        kleur.dim(`     ✓ posthog: ${r.events_pushed} events pushed · ${r.events_skipped} skipped`)
+      );
+    } catch (err) {
+      console.warn(
+        kleur.yellow(
+          `     ⚠ PostHog eval push failed: ${err instanceof Error ? err.message : String(err)}`
+        )
+      );
+    }
   }
 
-  await pushTrainToSources(pushOpts, staged.events, staged.user_emails, evalSince);
+  if (bundle.enabled.sentry) {
+    console.log(kleur.cyan(`   • Sentry: capturing eval error events...`));
+    try {
+      const sentryCfg: { dsn?: string; authToken?: string; orgSlug?: string; projectSlug?: string } = {
+        ...(process.env.SENTRY_DSN ? { dsn: process.env.SENTRY_DSN } : {}),
+        ...(process.env.SENTRY_AUTH_TOKEN ? { authToken: process.env.SENTRY_AUTH_TOKEN } : {}),
+        ...(process.env.SENTRY_ORG_SLUG ? { orgSlug: process.env.SENTRY_ORG_SLUG } : {}),
+        ...(process.env.SENTRY_PROJECT_SLUG ? { projectSlug: process.env.SENTRY_PROJECT_SLUG } : {}),
+      };
+      const r = await pushSentryEvents(sentryCfg, staged.events);
+      console.log(
+        kleur.dim(`     ✓ sentry: ${r.events_pushed} events pushed · ${r.events_skipped} skipped`)
+      );
+    } catch (err) {
+      console.warn(
+        kleur.yellow(
+          `     ⚠ Sentry eval push failed: ${err instanceof Error ? err.message : String(err)}`
+        )
+      );
+    }
+  }
 
-  // After staged events are pushed, advance the Stripe Test Clock to the end
-  // of the eval window so any auto-renewal / failure events queued by the
-  // sandbox fire at simulated timestamps.
-  let clockAdvanced: { clock_id: string; final_iso: string } | null = null;
+  // Advance existing seed clocks to the eval-window end so any pending
+  // renewal/dunning events fire on the simulated timeline.
+  let clockAdvanced: { clock_ids: string[]; final_iso: string } | null = null;
   if (bundle.enabled.stripe) {
     try {
-      clockAdvanced = await advanceLatestSeedClockTo(
+      clockAdvanced = await advanceAllSeedClocksTo(
         { apiKey: process.env.STRIPE_API_KEY! },
         evalUntil
       );
       if (clockAdvanced) {
+        const summary =
+          clockAdvanced.clock_ids.length === 1
+            ? clockAdvanced.clock_ids[0]
+            : `${clockAdvanced.clock_ids.length} clocks`;
         console.log(
           kleur.dim(
-            `   • advanced Stripe test clock ${clockAdvanced.clock_id} → ${clockAdvanced.final_iso}`
+            `   • advanced Stripe test clock ${summary} → ${clockAdvanced.final_iso}`
           )
         );
       } else {
@@ -272,7 +326,7 @@ function renderHoldoutReport(args: {
   f1: number;
   pushedEvents: number;
   sourceCounts: Record<string, number>;
-  clockAdvanced: { clock_id: string; final_iso: string } | null;
+  clockAdvanced: { clock_ids: string[]; final_iso: string } | null;
   onlyInReal: string[];
   onlyInStaged: string[];
   realActualEvents: number;
@@ -284,8 +338,13 @@ function renderHoldoutReport(args: {
   lines.push(`**Eval window:** ${args.cutoffIso} → ${args.evalUntilIso}`);
   lines.push(`**Pushed staged events:** ${args.pushedEvents}`);
   if (args.clockAdvanced) {
+    const ids = args.clockAdvanced.clock_ids;
+    const summary =
+      ids.length === 1
+        ? `\`${ids[0]}\``
+        : `${ids.length} clocks (\`${ids[0]}\`, …)`;
     lines.push(
-      `**Stripe test clock:** \`${args.clockAdvanced.clock_id}\` advanced to ${args.clockAdvanced.final_iso}`
+      `**Stripe test clock:** ${summary} advanced to ${args.clockAdvanced.final_iso}`
     );
   }
   lines.push("");

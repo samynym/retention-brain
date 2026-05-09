@@ -1,7 +1,6 @@
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
-import { MODEL_ID, type Channel } from "@rcrb/core";
+import { getModel, type Channel } from "@rcrb/core";
 import type { RiskScore } from "@rcrb/risk-engine";
 import type { OfferDecision } from "./decide-offer.js";
 import { formatTopSignals } from "./prompts.js";
@@ -37,7 +36,7 @@ export async function compose(args: {
   const wantsSubject = channel === "email" || channel === "dunning_fix";
 
   const { object } = await generateObject({
-    model: anthropic(MODEL_ID),
+    model: getModel("creative"),
     schema: Schema,
     system:
       "You write retention copy that is warm, specific, and not desperate. " +

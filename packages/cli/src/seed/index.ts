@@ -19,7 +19,14 @@ export type SeedRunOpts = {
   evalDays: number;
   numUsers: number;
   seed: string;
-  /** Anchor of the train window. Default: now − evalDays (so eval is "the future"). */
+  /**
+   * Anchor of the synthetic timeline. Default: now − trainDays, so the train
+   * window's synthetic cutoff lands at wall-clock-now. This is what makes the
+   * temporal holdout actually work: Stripe events fire at wall-clock-now (no
+   * backdating possible), so they need to land in the train-window backfill —
+   * which means cutoff must be ≥ wall-clock-of-seed-end. Reveal-future then
+   * fires API calls strictly after the cutoff, landing them in eval.
+   */
   start?: Date;
   enabled: EnabledSources;
   stripeConfig?: StripeSeedConfig;
@@ -42,7 +49,12 @@ export type SeedRunResult = {
 };
 
 export async function runSeed(opts: SeedRunOpts): Promise<SeedRunResult> {
-  const start = opts.start ?? new Date(Date.now() - opts.evalDays * DAY_MS);
+  // Anchor the synthetic timeline so the cutoff lands at wall-clock-now.
+  // Synthetic events span [start, start + trainDays + evalDays]
+  //   = [now − trainDays, now + evalDays].
+  // Synthetic train events: timestamp < now (in the past)
+  // Synthetic eval events:  timestamp ≥ now (in the future)
+  const start = opts.start ?? new Date(Date.now() - opts.trainDays * DAY_MS);
   const totalDays = opts.trainDays + opts.evalDays;
 
   const { events: rawEvents } = generate({
@@ -63,35 +75,45 @@ export async function runSeed(opts: SeedRunOpts): Promise<SeedRunResult> {
     return { ...e, user_id: newUid };
   });
 
-  const trainCutoffMs = start.getTime() + opts.trainDays * DAY_MS;
-  const evalUntilMs = start.getTime() + totalDays * DAY_MS;
+  // Synthetic train/eval split — uses the synthetic timestamps on the events.
+  // PostHog preserves these via historical_migration so the in-source filter
+  // matches.
+  const syntheticCutoffMs = start.getTime() + opts.trainDays * DAY_MS;
+  const syntheticEvalUntilMs = start.getTime() + totalDays * DAY_MS;
 
   const trainEvents: Event[] = [];
   const evalEvents: Event[] = [];
   for (const e of events) {
     const ts = new Date(e.timestamp).getTime();
-    if (ts < trainCutoffMs) trainEvents.push(e);
-    else if (ts < evalUntilMs) evalEvents.push(e);
+    if (ts < syntheticCutoffMs) trainEvents.push(e);
+    else if (ts < syntheticEvalUntilMs) evalEvents.push(e);
   }
 
-  // Stage the eval window before attempting pushes — if pushes throw partway
-  // through, reveal-future still has the local truth and we don't lose the run.
+  const perSource = await pushTrainToSources(opts, trainEvents, userEmails, start);
+
+  // Wall-clock cutoff: AFTER all train pushes complete. Stripe API calls fired
+  // during pushTrainToSources have created < cutoffMs (they happened before
+  // this point). Reveal-future will run later and any API calls it makes will
+  // have created > cutoffMs → they land in the eval-window backfill query.
+  const cutoffMs = Date.now();
+  const evalUntilMs = cutoffMs + opts.evalDays * DAY_MS;
+
+  // Stage the eval events with the wall-clock cutoff so reveal-future and the
+  // brain agree on what's "future" relative to the seed.
   const stagedPath = await writeStaged({
     generated_at: new Date().toISOString(),
     seed: opts.seed,
-    cutoff_iso: new Date(trainCutoffMs).toISOString(),
+    cutoff_iso: new Date(cutoffMs).toISOString(),
     eval_until_iso: new Date(evalUntilMs).toISOString(),
     user_emails: userEmails,
     events: evalEvents,
   });
 
-  const perSource = await pushTrainToSources(opts, trainEvents, userEmails, start);
-
   return {
     total_events: events.length,
     train_events: trainEvents.length,
     eval_events: evalEvents.length,
-    cutoff_iso: new Date(trainCutoffMs).toISOString(),
+    cutoff_iso: new Date(cutoffMs).toISOString(),
     eval_until_iso: new Date(evalUntilMs).toISOString(),
     staged_path: stagedPath,
     per_source: perSource,
@@ -119,10 +141,14 @@ export async function pushTrainToSources(
         ...(syntheticStart ? { syntheticStart } : {}),
       });
       logResult(r);
-      if (r.test_clock_id) {
+      if (r.test_clock_ids && r.test_clock_ids.length > 0) {
+        const summary =
+          r.test_clock_ids.length === 1
+            ? r.test_clock_ids[0]
+            : `${r.test_clock_ids.length} clocks (${r.test_clock_ids[0]}…)`;
         console.log(
           kleur.dim(
-            `       test_clock=${r.test_clock_id} · final frozen_time=${r.final_frozen_time_iso ?? "—"}`
+            `       test_clocks=${summary} · final frozen_time=${r.final_frozen_time_iso ?? "—"}`
           )
         );
       }

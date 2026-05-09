@@ -2,11 +2,12 @@ import "dotenv/config";
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import kleur from "kleur";
-import { buildTimelines, type Event, type Intervention } from "@rcrb/core";
+import { buildTimelines, hasLLMKey, type Event, type Intervention } from "@rcrb/core";
 import { scoreAll } from "@rcrb/risk-engine";
 import { generateAll } from "@rcrb/intervention-agent";
 import { loadSourcesFromEnv, NoSubscriptionSourceError } from "../source-config.js";
 import { renderBriefing } from "../briefing.js";
+import { tryReadStaged } from "../seed/staged.js";
 
 const DAY_MS = 86_400_000;
 const BACKFILL_DAYS = 60;
@@ -21,14 +22,20 @@ function parseFraction(value: string, name: string): number {
   return n;
 }
 
-function parseAsOf(value: string | undefined): Date {
-  if (!value) return new Date();
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) {
-    console.error(kleur.red(`invalid --as-of: ${value} (expected ISO date)`));
-    process.exit(2);
+async function resolveAsOf(value: string | undefined): Promise<{ at: Date; from: "flag" | "staged" | "now" }> {
+  if (value) {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) {
+      console.error(kleur.red(`invalid --as-of: ${value} (expected ISO date)`));
+      process.exit(2);
+    }
+    return { at: d, from: "flag" };
   }
-  return d;
+  const staged = await tryReadStaged();
+  if (staged) {
+    return { at: new Date(staged.cutoff_iso), from: "staged" };
+  }
+  return { at: new Date(), from: "now" };
 }
 
 export async function runRun(opts: { asOf?: string; threshold: string }): Promise<void> {
@@ -43,15 +50,21 @@ export async function runRun(opts: { asOf?: string; threshold: string }): Promis
     throw err;
   }
   const threshold = parseFraction(opts.threshold, "threshold");
-  const now = parseAsOf(opts.asOf);
+  const { at: now, from: asOfSource } = await resolveAsOf(opts.asOf);
   const since = new Date(now.getTime() - BACKFILL_DAYS * DAY_MS);
 
   const enabledNames = Object.entries(bundle.enabled)
-    .filter(([, v]) => v)
-    .map(([k]) => k);
+    .filter(([, v]) => (Array.isArray(v) ? v.length > 0 : !!v))
+    .map(([k, v]) => (Array.isArray(v) ? v.map((label) => `${k}:${label}`).join(",") : k));
+  const asOfTag =
+    asOfSource === "staged"
+      ? " (from .staged-future.json)"
+      : asOfSource === "flag"
+        ? " (from --as-of)"
+        : "";
   console.log(
     kleur.cyan().bold(
-      `🧠 Briefing run · cutoff ${now.toISOString()} · sources: ${enabledNames.join(", ")}`
+      `🧠 Briefing run · cutoff ${now.toISOString()}${asOfTag} · sources: ${enabledNames.join(", ")}`
     )
   );
 
@@ -80,7 +93,7 @@ export async function runRun(opts: { asOf?: string; threshold: string }): Promis
 
   const timelines = buildTimelines(events);
   console.log(kleur.cyan(`📊 Risk scoring ${timelines.length} users...`));
-  const useLLM = !!process.env.ANTHROPIC_API_KEY;
+  const useLLM = hasLLMKey();
   const scores = await scoreAll(timelines, { useLLM, nowIso: now.toISOString() });
   const flagged = scores.filter((s) => s.score >= threshold);
   console.log(
@@ -88,7 +101,7 @@ export async function runRun(opts: { asOf?: string; threshold: string }): Promis
   );
 
   let interventions: Intervention[] = [];
-  if (process.env.ANTHROPIC_API_KEY && flagged.length > 0) {
+  if (useLLM && flagged.length > 0) {
     console.log(
       kleur.cyan(`🤖 Generating interventions for top ${Math.min(TOP_INTERVENTIONS, flagged.length)}...`)
     );
@@ -98,9 +111,9 @@ export async function runRun(opts: { asOf?: string; threshold: string }): Promis
       max: TOP_INTERVENTIONS,
     });
     console.log(kleur.dim(`   • ${interventions.length} drafted`));
-  } else if (!process.env.ANTHROPIC_API_KEY) {
+  } else if (!useLLM) {
     console.log(
-      kleur.dim("   (set ANTHROPIC_API_KEY to generate intervention drafts)")
+      kleur.dim("   (set ANTHROPIC_API_KEY or OPENAI_API_KEY to generate intervention drafts)")
     );
   }
 

@@ -1,7 +1,6 @@
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
-import { MODEL_ID, type Intervention } from "@rcrb/core";
+import { getModel, getModelId, type Intervention } from "@rcrb/core";
 
 const CriticSchema = z.object({
   scores: z.object({
@@ -20,14 +19,14 @@ export async function critique(
   intervention: Intervention,
   opts: { model?: string } = {}
 ): Promise<Critique> {
-  const modelId = opts.model ?? MODEL_ID;
+  const modelId = opts.model ?? getModelId("critic");
   const offerLine =
     intervention.offer.kind === "none"
       ? "none"
       : `${intervention.offer.kind}${intervention.offer.value !== undefined ? ` value=${intervention.offer.value}` : ""}`;
 
   const { object } = await generateObject({
-    model: anthropic(modelId),
+    model: getModel(modelId),
     schema: CriticSchema,
     system:
       "You are a senior retention PM reviewing a generated intervention. " +
