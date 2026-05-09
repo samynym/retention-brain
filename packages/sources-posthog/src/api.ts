@@ -35,8 +35,9 @@ const ListResponse = z.object({
   next: z.string().nullable().optional(),
 });
 
-// 200 pages × 100 items = 20k events — generous backfill ceiling for v1.
-const MAX_PAGES = 200;
+// 500 pages × 1000 items = 500k events — covers ~100-user 60-day runs.
+const MAX_PAGES = 500;
+const PAGE_LIMIT = 1000;
 
 export function postHogApi(config: PostHogConfig) {
   const host = config.host ?? DEFAULT_HOST;
@@ -70,12 +71,19 @@ export function postHogApi(config: PostHogConfig) {
 
   return {
     listEvents(opts: { since: Date; until: Date }): AsyncIterable<PostHogEvent> {
+      // PostHog's /events/ endpoint silently caps date-bounded responses; using
+      // `after` only and filtering `before` client-side avoids the truncation.
       const after = opts.since.toISOString();
-      const before = opts.until.toISOString();
-      return paginate(
-        `${host}${projectPath}/events/?after=${encodeURIComponent(after)}&before=${encodeURIComponent(before)}&limit=100`,
+      const untilMs = opts.until.getTime();
+      const inner = paginate(
+        `${host}${projectPath}/events/?after=${encodeURIComponent(after)}&limit=${PAGE_LIMIT}`,
         PostHogEvent,
       );
+      return (async function* () {
+        for await (const e of inner) {
+          if (new Date(e.timestamp).getTime() < untilMs) yield e;
+        }
+      })();
     },
   };
 }

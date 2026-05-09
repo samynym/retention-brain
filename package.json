@@ -12,6 +12,7 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "lint": "tsc -b",
+    "rcrb": "tsx packages/cli/src/index.ts",
     "demo": "tsx packages/cli/src/index.ts demo"
   },
   "devDependencies": {

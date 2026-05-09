@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { confirm, input } from "@inquirer/prompts";
+import { confirm, input, select } from "@inquirer/prompts";
 import kleur from "kleur";
 
 type EnvMap = Record<string, string>;
@@ -37,7 +37,7 @@ function renderEnvFile(env: EnvMap): string {
   const lines: string[] = [header];
 
   const sections: { title: string; keys: string[] }[] = [
-    { title: "# LLM", keys: ["ANTHROPIC_API_KEY"] },
+    { title: "# LLM", keys: ["LLM_PROVIDER", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"] },
     {
       title: "# RevenueCat",
       keys: ["REVENUECAT_API_KEY", "REVENUECAT_PROJECT_ID"],
@@ -90,10 +90,28 @@ export async function runInit(): Promise<void> {
   const env: EnvMap = {};
 
   console.log(kleur.cyan("LLM"));
-  env.ANTHROPIC_API_KEY = await promptOptional(
-    "Anthropic API key (sk-ant-...)",
-    "— required for LLM intervention generation, optional otherwise"
-  );
+  const provider = await select<"anthropic" | "openai" | "skip">({
+    message: "LLM provider",
+    choices: [
+      { name: "Anthropic (Claude)", value: "anthropic" },
+      { name: "OpenAI (GPT)", value: "openai" },
+      { name: "Skip — no LLM (heuristic-only briefings)", value: "skip" },
+    ],
+    default: "anthropic",
+  });
+  if (provider === "anthropic") {
+    env.LLM_PROVIDER = "anthropic";
+    env.ANTHROPIC_API_KEY = await promptOptional(
+      "Anthropic API key (sk-ant-...)",
+      "— required for LLM intervention generation"
+    );
+  } else if (provider === "openai") {
+    env.LLM_PROVIDER = "openai";
+    env.OPENAI_API_KEY = await promptOptional(
+      "OpenAI API key (sk-...)",
+      "— required for LLM intervention generation"
+    );
+  }
 
   console.log("");
   console.log(kleur.cyan("Subscription source (≥1 required)"));
@@ -210,10 +228,11 @@ export async function runInit(): Promise<void> {
   if (env.SENTRY_AUTH_TOKEN) configured.push("Sentry");
   if (env.POSTHOG_PERSONAL_API_KEY) configured.push("PostHog");
   console.log(kleur.dim(`   sources: ${configured.join(", ")}`));
-  if (env.ANTHROPIC_API_KEY) {
-    console.log(kleur.dim("   LLM: enabled (intervention drafts will be generated)"));
+  if (env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY) {
+    const which = env.ANTHROPIC_API_KEY ? "Anthropic" : "OpenAI";
+    console.log(kleur.dim(`   LLM: enabled via ${which} (intervention drafts will be generated)`));
   } else {
-    console.log(kleur.dim("   LLM: disabled (set ANTHROPIC_API_KEY later to enable drafts)"));
+    console.log(kleur.dim("   LLM: disabled (set ANTHROPIC_API_KEY or OPENAI_API_KEY later to enable drafts)"));
   }
 
   console.log("");

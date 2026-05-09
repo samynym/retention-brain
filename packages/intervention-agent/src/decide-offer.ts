@@ -1,7 +1,6 @@
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
-import { MODEL_ID, type Channel } from "@rcrb/core";
+import { getModel, type Channel } from "@rcrb/core";
 import type { RiskScore } from "@rcrb/risk-engine";
 import { formatTopSignals } from "./prompts.js";
 
@@ -25,7 +24,7 @@ export async function decideOffer(
   channel: Channel
 ): Promise<OfferDecision> {
   const { object } = await generateObject({
-    model: anthropic(MODEL_ID),
+    model: getModel("structured"),
     schema: Schema,
     system:
       "You pick a calibrated retention offer for an at-risk subscription user. " +

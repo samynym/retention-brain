@@ -53,24 +53,36 @@ export function renderBriefing(input: BriefingInput): string {
 
   const interventionsByUser = new Map(input.interventions.map((i) => [i.user_id, i]));
 
-  lines.push(`## Top ${Math.min(topN, flagged.length)} at-risk users`);
+  // Promote users with a drafted intervention into the top-N detail section so
+  // the reader sees actionable emails first; users where the agent recommended
+  // no_op fall to the tail with their score preserved.
+  const ranked = [...flagged].sort((a, b) => {
+    const aHas = interventionsByUser.has(a.user_id) ? 1 : 0;
+    const bHas = interventionsByUser.has(b.user_id) ? 1 : 0;
+    if (aHas !== bHas) return bHas - aHas;
+    return b.score - a.score;
+  });
+
+  lines.push(`## Top ${Math.min(topN, ranked.length)} at-risk users`);
   lines.push("");
 
-  for (let i = 0; i < Math.min(topN, flagged.length); i++) {
-    const score = flagged[i]!;
+  for (let i = 0; i < Math.min(topN, ranked.length); i++) {
+    const score = ranked[i]!;
     const timeline = input.timelinesByUser.get(score.user_id);
     const intervention = interventionsByUser.get(score.user_id);
     lines.push(...renderUserBlock(i + 1, score, timeline, intervention));
     lines.push("");
   }
 
-  if (flagged.length > topN) {
-    lines.push(`## Remaining flagged users (${flagged.length - topN})`);
+  if (ranked.length > topN) {
+    lines.push(`## Remaining flagged users (${ranked.length - topN})`);
     lines.push("");
-    for (const s of flagged.slice(topN)) {
+    for (const s of ranked.slice(topN)) {
       const top = s.top_signals[0];
       const driver = top ? top.name : "—";
-      lines.push(`- \`${s.user_id}\` — risk ${s.score.toFixed(2)} · top: ${driver}`);
+      const noAction = !interventionsByUser.has(s.user_id);
+      const suffix = noAction ? " · agent: no_op (risk borderline)" : "";
+      lines.push(`- \`${s.user_id}\` — risk ${s.score.toFixed(2)} · top: ${driver}${suffix}`);
     }
     lines.push("");
   }
@@ -133,7 +145,7 @@ function renderUserBlock(
     out.push("");
   } else {
     out.push("**Recommended play**");
-    out.push("- (no intervention generated — set ANTHROPIC_API_KEY or threshold not met)");
+    out.push("- Agent recommended no action — signal too borderline to warrant a retention email yet. Re-evaluate at next run.");
     out.push("");
   }
 

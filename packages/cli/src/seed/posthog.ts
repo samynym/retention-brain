@@ -65,7 +65,14 @@ export async function pushPostHogEvents(
       const res = await fetchWithRetry(batchUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_key: cfg.projectApiKey, batch }),
+        // historical_migration tells PostHog to honor the timestamp we send
+        // instead of clamping to receive-time, which is required when seeding
+        // a synthetic timeline that spans past dates.
+        body: JSON.stringify({
+          api_key: cfg.projectApiKey,
+          historical_migration: true,
+          batch,
+        }),
       });
       if (res.ok) {
         result.events_pushed += batch.length;
@@ -77,7 +84,11 @@ export async function pushPostHogEvents(
           const single = await fetchWithRetry(url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ api_key: cfg.projectApiKey, ...item }),
+            body: JSON.stringify({
+              api_key: cfg.projectApiKey,
+              historical_migration: true,
+              ...item,
+            }),
           });
           if (single.ok) okCount++;
         }

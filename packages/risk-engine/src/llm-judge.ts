@@ -1,6 +1,5 @@
-import { MODEL_ID, type UserTimeline } from "@rcrb/core";
+import { getModel, type UserTimeline } from "@rcrb/core";
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 
 const JudgeSchema = z.object({
@@ -31,7 +30,7 @@ export async function llmJudge(timeline: UserTimeline): Promise<LlmJudgeResult> 
       .join("\n");
 
     const { object } = await generateObject({
-      model: anthropic(MODEL_ID),
+      model: getModel("structured"),
       schema: JudgeSchema,
       system:
         "You are a churn-risk analyst for a subscription app. " +
