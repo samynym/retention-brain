@@ -1,0 +1,47 @@
+{
+  "$schema": "https://example.com/rcrb-mcp.schema.json",
+  "_comment": "Example .rcrb/mcp.json wiring four canonical retention data sources via their MCP servers. Every command/url/tool below is a placeholder — replace with the actual values for the MCP server you've installed. The point: this file is the entire surface area for adding a new source. No code changes needed.",
+  "sources": [
+    {
+      "label": "subscriptions",
+      "_about": "RevenueCat — subscription lifecycle (purchases, renewals, cancellations, refunds).",
+      "command": "<launch command for the RC MCP, e.g. npx>",
+      "args": ["<args>", "<for the RC MCP server>"],
+      "tool": "<tool name that lists customer events>",
+      "mapper": "llm",
+      "hint": "RevenueCat customer events. user_id should be the app user id (not the RC subscriber id).",
+      "passDateRange": true
+    },
+    {
+      "label": "billing",
+      "_about": "Stripe — payment success/failure, customer cancellations, refunds.",
+      "command": "<launch command for the Stripe MCP>",
+      "args": ["<args>"],
+      "tool": "<tool name that lists Stripe events>",
+      "mapper": "llm",
+      "hint": "Stripe events. Resolve the customer's app_user_id from customer.metadata.app_user_id when available; otherwise fall back to email."
+    },
+    {
+      "label": "engagement",
+      "_about": "PostHog — session activity, feature usage.",
+      "command": "<launch command for the PostHog MCP>",
+      "args": ["<args>"],
+      "tool": "<tool name that returns events>",
+      "mapper": "config",
+      "mapping": {
+        "user_id": "$.properties.app_user_id",
+        "timestamp": "$.timestamp",
+        "kind": "usage.session"
+      }
+    },
+    {
+      "label": "errors",
+      "_about": "Sentry — crash and client errors per user.",
+      "url": "<HTTP URL of the Sentry MCP, if you use the hosted one>",
+      "headers": { "Authorization": "Bearer <SENTRY_MCP_TOKEN>" },
+      "tool": "<tool name>",
+      "mapper": "llm",
+      "hint": "Sentry issues. user_id should be the app user id from the issue's user context."
+    }
+  ]
+}

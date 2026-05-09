@@ -9,10 +9,6 @@
   "references": [
     { "path": "../core" },
     { "path": "../sources" },
-    { "path": "../sources-revenuecat" },
-    { "path": "../sources-stripe" },
-    { "path": "../sources-sentry" },
-    { "path": "../sources-posthog" },
     { "path": "../sources-mcp" },
     { "path": "../risk-engine" },
     { "path": "../intervention-agent" },
