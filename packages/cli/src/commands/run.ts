@@ -7,7 +7,6 @@ import { scoreAll } from "@rcrb/risk-engine";
 import { generateAll } from "@rcrb/intervention-agent";
 import { loadSourcesFromEnv, NoSubscriptionSourceError } from "../source-config.js";
 import { renderBriefing } from "../briefing.js";
-import { tryReadStaged } from "../seed/staged.js";
 
 const DAY_MS = 86_400_000;
 const BACKFILL_DAYS = 60;
@@ -22,7 +21,7 @@ function parseFraction(value: string, name: string): number {
   return n;
 }
 
-async function resolveAsOf(value: string | undefined): Promise<{ at: Date; from: "flag" | "staged" | "now" }> {
+function resolveAsOf(value: string | undefined): { at: Date; from: "flag" | "now" } {
   if (value) {
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) {
@@ -30,10 +29,6 @@ async function resolveAsOf(value: string | undefined): Promise<{ at: Date; from:
       process.exit(2);
     }
     return { at: d, from: "flag" };
-  }
-  const staged = await tryReadStaged();
-  if (staged) {
-    return { at: new Date(staged.cutoff_iso), from: "staged" };
   }
   return { at: new Date(), from: "now" };
 }
@@ -50,18 +45,13 @@ export async function runRun(opts: { asOf?: string; threshold: string }): Promis
     throw err;
   }
   const threshold = parseFraction(opts.threshold, "threshold");
-  const { at: now, from: asOfSource } = await resolveAsOf(opts.asOf);
+  const { at: now, from: asOfSource } = resolveAsOf(opts.asOf);
   const since = new Date(now.getTime() - BACKFILL_DAYS * DAY_MS);
 
   const enabledNames = Object.entries(bundle.enabled)
     .filter(([, v]) => (Array.isArray(v) ? v.length > 0 : !!v))
     .map(([k, v]) => (Array.isArray(v) ? v.map((label) => `${k}:${label}`).join(",") : k));
-  const asOfTag =
-    asOfSource === "staged"
-      ? " (from .staged-future.json)"
-      : asOfSource === "flag"
-        ? " (from --as-of)"
-        : "";
+  const asOfTag = asOfSource === "flag" ? " (from --as-of)" : "";
   console.log(
     kleur.cyan().bold(
       `🧠 Briefing run · cutoff ${now.toISOString()}${asOfTag} · sources: ${enabledNames.join(", ")}`
