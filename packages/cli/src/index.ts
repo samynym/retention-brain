@@ -5,6 +5,8 @@ import { runDemo } from "./commands/demo.js";
 import { runEval } from "./commands/eval.js";
 import { runInit } from "./commands/init.js";
 import { runRun } from "./commands/run.js";
+import { runWebhookListen } from "./commands/webhook-listen.js";
+import { runEventsMcp } from "./commands/events-mcp.js";
 
 const program = new Command();
 program
@@ -42,5 +44,18 @@ program
   .option("--as-of <iso>", "evaluation cutoff (ISO date); defaults to now")
   .option("--threshold <n>", "risk threshold for flagging", "0.4")
   .action(runRun);
+
+program
+  .command("webhook-listen")
+  .description("Start an HTTP webhook receiver for RC + Stripe; appends events to .rcrb/events.jsonl")
+  .option("--port <n>", "HTTP port", "4044")
+  .option("--store <path>", "event log file", ".rcrb/events.jsonl")
+  .action(runWebhookListen);
+
+program
+  .command("events-mcp-server")
+  .description("Stdio MCP server that exposes captured webhook events as list_events(since, until). Intended to be launched as a child process from .rcrb/mcp.json")
+  .option("--store <path>", "event log file", ".rcrb/events.jsonl")
+  .action(runEventsMcp);
 
 await program.parseAsync();
