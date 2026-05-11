@@ -21,10 +21,22 @@ export type LLMNormalizeOptions = {
   until?: Date;
 };
 
-export async function normalizeWithLLM(raw: unknown, opts: LLMNormalizeOptions): Promise<Event[]> {
-  const records = sliceForPrompt(raw);
-  if (records.length === 0) return [];
+const RECORDS_PER_LLM_CALL = 50;
+const MAX_BATCHES = 20; // hard cap to keep cost bounded; 50*20 = 1000 records / source / run
 
+export async function normalizeWithLLM(raw: unknown, opts: LLMNormalizeOptions): Promise<Event[]> {
+  const batches = batchRecords(raw);
+  if (batches.length === 0) return [];
+
+  const events: Event[] = [];
+  for (const batch of batches.slice(0, MAX_BATCHES)) {
+    const batchEvents = await normalizeOneBatch(batch, opts);
+    events.push(...batchEvents);
+  }
+  return events;
+}
+
+async function normalizeOneBatch(records: unknown[], opts: LLMNormalizeOptions): Promise<Event[]> {
   const { object } = await generateObject({
     model: getModel("structured"),
     schema: NormalizedBatch,
@@ -63,16 +75,28 @@ export async function normalizeWithLLM(raw: unknown, opts: LLMNormalizeOptions):
   return events;
 }
 
-const MAX_RECORDS_PER_BATCH = 50;
+function batchRecords(raw: unknown): unknown[][] {
+  const all = collectRecords(raw);
+  const batches: unknown[][] = [];
+  for (let i = 0; i < all.length; i += RECORDS_PER_LLM_CALL) {
+    batches.push(all.slice(i, i + RECORDS_PER_LLM_CALL));
+  }
+  return batches;
+}
 
-function sliceForPrompt(raw: unknown): unknown[] {
-  if (Array.isArray(raw)) return raw.slice(0, MAX_RECORDS_PER_BATCH);
+function collectRecords(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw;
   if (raw && typeof raw === "object") {
     for (const key of ["data", "items", "results", "records", "events", "conversations", "tickets"]) {
       const val = (raw as Record<string, unknown>)[key];
-      if (Array.isArray(val)) return val.slice(0, MAX_RECORDS_PER_BATCH);
+      if (Array.isArray(val)) return val;
     }
     return [raw];
+  }
+  // Tools that return text (PostHog HogQL, Sentry markdown summaries, etc.) reach this branch.
+  // Hand the LLM the raw blob in a single batch.
+  if (typeof raw === "string" && raw.trim()) {
+    return [{ __raw_text: raw }];
   }
   return [];
 }

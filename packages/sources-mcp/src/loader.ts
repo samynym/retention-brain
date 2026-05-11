@@ -40,18 +40,42 @@ export type LoadedMCPSource = MCPSourceConfig;
 
 const DEFAULT_JSON_PATHS = [".rcrb/mcp.json", "rcrb.config.json"];
 
-export function loadMCPSourcesFromFile(cwd: string = process.cwd()): LoadedMCPSource[] {
+export function loadMCPSourcesFromFile(
+  cwd: string = process.cwd(),
+  env: NodeJS.ProcessEnv = process.env
+): LoadedMCPSource[] {
   for (const rel of DEFAULT_JSON_PATHS) {
     const path = resolve(cwd, rel);
     if (!existsSync(path)) continue;
     const raw = readFileSync(path, "utf8");
-    const parsed = FileSchema.safeParse(JSON.parse(raw));
+    const substituted = substituteEnvVars(raw, env, rel);
+    const parsed = FileSchema.safeParse(JSON.parse(substituted));
     if (!parsed.success) {
       throw new Error(`${rel}: ${parsed.error.issues.map((i) => `${i.path.join(".")} — ${i.message}`).join("; ")}`);
     }
     return parsed.data.sources.map(toSourceConfig);
   }
   return [];
+}
+
+// Replaces ${VAR} occurrences with process.env[VAR]. Performs the substitution
+// on the raw JSON string so headers, urls, args, etc. all pick it up uniformly.
+// JSON-escapes the value so a secret containing quotes/backslashes can't break parsing.
+function substituteEnvVars(raw: string, env: NodeJS.ProcessEnv, fileLabel: string): string {
+  const missing: string[] = [];
+  const out = raw.replace(/\$\{([A-Z_][A-Z0-9_]*)\}/g, (_, name) => {
+    const value = env[name];
+    if (value === undefined) {
+      missing.push(name);
+      return "";
+    }
+    // strip the surrounding JSON quotes a regex JSON.stringify would add
+    return JSON.stringify(value).slice(1, -1);
+  });
+  if (missing.length > 0) {
+    throw new Error(`${fileLabel}: missing env var(s) referenced via \${...}: ${[...new Set(missing)].join(", ")}`);
+  }
+  return out;
 }
 
 export function loadMCPSourcesFromEnv(env: NodeJS.ProcessEnv = process.env): LoadedMCPSource[] {
@@ -61,9 +85,11 @@ export function loadMCPSourcesFromEnv(env: NodeJS.ProcessEnv = process.env): Loa
 }
 
 export function loadMCPSources(opts: { cwd?: string; env?: NodeJS.ProcessEnv } = {}): LoadedMCPSource[] {
-  const fromFile = loadMCPSourcesFromFile(opts.cwd);
+  const env = opts.env;
+  const cwd = opts.cwd;
+  const fromFile = loadMCPSourcesFromFile(cwd, env);
   if (fromFile.length > 0) return fromFile;
-  return loadMCPSourcesFromEnv(opts.env);
+  return loadMCPSourcesFromEnv(env);
 }
 
 type EntryInput = z.infer<typeof EntrySchema>;
