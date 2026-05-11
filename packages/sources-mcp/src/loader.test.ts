@@ -117,6 +117,47 @@ describe("loadMCPSourcesFromFile", () => {
     expect(entry?.transport).toEqual({ kind: "http", url: "https://x.com", headers: undefined });
   });
 
+  it("substitutes ${VAR} from env into string values", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "rcrb-mcp-"));
+    writeFileSync(
+      join(cwd, "rcrb.config.json"),
+      JSON.stringify({
+        sources: [
+          {
+            label: "x",
+            url: "https://x.example.com",
+            headers: { Authorization: "Bearer ${TEST_TOKEN}" },
+            tool: "fetch",
+          },
+        ],
+      })
+    );
+    const [entry] = loadMCPSourcesFromFile(cwd, { TEST_TOKEN: "secret-123" });
+    expect(entry?.transport).toEqual({
+      kind: "http",
+      url: "https://x.example.com",
+      headers: { Authorization: "Bearer secret-123" },
+    });
+  });
+
+  it("throws when ${VAR} references an undefined env var", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "rcrb-mcp-"));
+    writeFileSync(
+      join(cwd, "rcrb.config.json"),
+      JSON.stringify({
+        sources: [
+          {
+            label: "x",
+            url: "https://x.example.com",
+            headers: { Authorization: "Bearer ${MISSING_TOKEN}" },
+            tool: "fetch",
+          },
+        ],
+      })
+    );
+    expect(() => loadMCPSourcesFromFile(cwd, {})).toThrow(/MISSING_TOKEN/);
+  });
+
   it("throws on invalid schema", () => {
     const cwd = mkdtempSync(join(tmpdir(), "rcrb-mcp-"));
     writeFileSync(join(cwd, "rcrb.config.json"), JSON.stringify({ sources: [{ label: "x" }] }));
