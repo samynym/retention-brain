@@ -119,6 +119,43 @@ export REVENUECAT_WEBHOOK_SECRET=...     # the shared-secret you paste in RC's w
 
 Without either, the receiver accepts unsigned payloads — handy for sandbox tests, not for production.
 
+### Giving Stripe + RC a public URL
+
+`webhook-listen` binds to a local port — fine for testing on your machine. Stripe and RC need to POST from the public internet, so production setups need a reachable URL pointing at port 4044. Three real options, no code changes:
+
+**1. Tunnel (free, 30 seconds)** — for solo dev, hobby, demos:
+
+```sh
+# Cloudflare Tunnel (recommended — no account required for quick tunnels)
+cloudflared tunnel --url http://localhost:4044
+# prints a public https://<random>.trycloudflare.com URL
+
+# Or ngrok
+ngrok http 4044
+```
+
+Paste the printed URL + `/webhooks/stripe` into Stripe's webhook config, and `/webhooks/revenuecat` into RC's. Tunnels die when the laptop closes — fine for testing, not for prod.
+
+**2. VPS / PaaS deploy (~$3–5/mo)** — real production:
+
+The receiver is a plain Node server. Drop it on any host:
+
+```sh
+# fly.io
+fly launch --name your-rcrb-webhooks
+# accept the defaults; fly auto-generates a Dockerfile that runs `pnpm rcrb webhook-listen --port $PORT`
+fly secrets set STRIPE_WEBHOOK_SECRET=whsec_... REVENUECAT_WEBHOOK_SECRET=...
+fly deploy
+```
+
+Same shape on Railway, Render, Heroku, or a $5 DigitalOcean droplet behind Caddy. Whatever runs Node.
+
+**3. Serverless (Vercel / Cloudflare Workers)** — $0 typically:
+
+The current receiver uses `node:http` so it doesn't drop into a Vercel function as-is. If you want zero-infra, copy the body-mapping + storage logic into an API route and persist to a managed store (Vercel Blob, KV, or a hosted Postgres). About 50 lines of glue. Open an issue if you'd like a worked example.
+
+**Important:** wherever you deploy, set `STRIPE_WEBHOOK_SECRET` and `REVENUECAT_WEBHOOK_SECRET` so signature verification is enforced. Without them, anyone who finds your URL can write fake events to your briefing.
+
 ## License
 
 MIT

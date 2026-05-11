@@ -56,17 +56,47 @@ export function renderBriefing(input: BriefingInput): string {
   // Promote users with a drafted intervention into the top-N detail section so
   // the reader sees actionable emails first; users where the agent recommended
   // no_op fall to the tail with their score preserved.
-  const ranked = [...flagged].sort((a, b) => {
+  const sortByActionThenScore = (a: RiskScore, b: RiskScore): number => {
     const aHas = interventionsByUser.has(a.user_id) ? 1 : 0;
     const bHas = interventionsByUser.has(b.user_id) ? 1 : 0;
     if (aHas !== bHas) return bHas - aHas;
     return b.score - a.score;
-  });
+  };
 
-  lines.push(`## Top ${Math.min(topN, ranked.length)} at-risk users`);
+  // Split flagged users by current subscription state. "Win-back" = latest
+  // event is a cancel/refund with no subsequent purchase/renewal. They've
+  // already churned; the intervention is a save attempt, not retention.
+  const atRisk: RiskScore[] = [];
+  const winBack: RiskScore[] = [];
+  for (const s of flagged) {
+    const timeline = input.timelinesByUser.get(s.user_id);
+    if (isPostCancel(timeline)) winBack.push(s);
+    else atRisk.push(s);
+  }
+  atRisk.sort(sortByActionThenScore);
+  winBack.sort(sortByActionThenScore);
+
+  renderSection(lines, "At-risk users (not yet canceled)", atRisk, topN, input, interventionsByUser);
+  renderSection(lines, "Recent cancels — win-back candidates", winBack, topN, input, interventionsByUser);
+
+  return lines.join("\n");
+}
+
+function renderSection(
+  lines: string[],
+  title: string,
+  ranked: RiskScore[],
+  topN: number,
+  input: BriefingInput,
+  interventionsByUser: Map<string, Intervention>
+): void {
+  if (ranked.length === 0) return;
+
+  const detailN = Math.min(topN, ranked.length);
+  lines.push(`## ${title} — top ${detailN} of ${ranked.length}`);
   lines.push("");
 
-  for (let i = 0; i < Math.min(topN, ranked.length); i++) {
+  for (let i = 0; i < detailN; i++) {
     const score = ranked[i]!;
     const timeline = input.timelinesByUser.get(score.user_id);
     const intervention = interventionsByUser.get(score.user_id);
@@ -75,7 +105,7 @@ export function renderBriefing(input: BriefingInput): string {
   }
 
   if (ranked.length > topN) {
-    lines.push(`## Remaining flagged users (${ranked.length - topN})`);
+    lines.push(`### Remaining in this section (${ranked.length - topN})`);
     lines.push("");
     for (const s of ranked.slice(topN)) {
       const top = s.top_signals[0];
@@ -86,8 +116,22 @@ export function renderBriefing(input: BriefingInput): string {
     }
     lines.push("");
   }
+}
 
-  return lines.join("\n");
+// True iff the user's most recent subscription-state event is a cancel or
+// refund with no subsequent purchase/renewal. Reads from the timeline's
+// chronologically-sorted events.
+function isPostCancel(timeline: UserTimeline | undefined): boolean {
+  if (!timeline) return false;
+  const stateChanges = timeline.events.filter((e) =>
+    e.kind === "subscription.cancel" ||
+    e.kind === "subscription.refund" ||
+    e.kind === "subscription.purchase" ||
+    e.kind === "subscription.renewal"
+  );
+  if (stateChanges.length === 0) return false;
+  const latest = stateChanges[stateChanges.length - 1]!;
+  return latest.kind === "subscription.cancel" || latest.kind === "subscription.refund";
 }
 
 function renderUserBlock(
