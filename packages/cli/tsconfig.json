@@ -10,6 +10,7 @@
     { "path": "../core" },
     { "path": "../sources" },
     { "path": "../sources-mcp" },
+    { "path": "../webhook-receiver" },
     { "path": "../risk-engine" },
     { "path": "../intervention-agent" },
     { "path": "../eval" }

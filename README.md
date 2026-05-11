@@ -77,6 +77,48 @@ export MCP_BILLING_HINT="Stripe Subscription objects."
 
 `kind` must be one of `subscription.*`, `payment.*`, `usage.*`, `support.*`, `error.*`, `review.submitted`.
 
+## Webhook layer (for RC + Stripe)
+
+The official RevenueCat and Stripe MCPs don't expose a "list events between dates" tool — only per-customer queries. To get the `payment_health` signal (which dominates churn prediction) the brain needs a forward-capture mechanism.
+
+`rcrb webhook-listen` starts a small HTTP receiver that catches RC + Stripe webhooks and appends them to `.rcrb/events.jsonl` already in the brain's event schema. A second built-in command, `rcrb events-mcp-server`, fronts the same file as a stdio MCP. You wire it into `.rcrb/mcp.json` like any other source.
+
+```sh
+pnpm rcrb webhook-listen --port 4044
+# point Stripe + RC dashboards at
+#   https://<your-public-host>/webhooks/stripe
+#   https://<your-public-host>/webhooks/revenuecat
+```
+
+In `.rcrb/mcp.json`:
+
+```json
+{
+  "label": "webhook-events",
+  "command": "pnpm",
+  "args": ["rcrb", "events-mcp-server", "--store", ".rcrb/events.jsonl"],
+  "tool": "list_events",
+  "mapper": "config",
+  "mapping": {
+    "user_id": "$.user_id",
+    "timestamp": "$.timestamp",
+    "kind": "$.kind",
+    "id": "$.id",
+    "payload": "$.payload"
+  },
+  "passDateRange": true
+}
+```
+
+Signature verification is wired but only enforced if you set:
+
+```sh
+export STRIPE_WEBHOOK_SECRET=whsec_...
+export REVENUECAT_WEBHOOK_SECRET=...     # the shared-secret you paste in RC's webhook config
+```
+
+Without either, the receiver accepts unsigned payloads — handy for sandbox tests, not for production.
+
 ## License
 
 MIT
