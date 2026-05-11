@@ -16,6 +16,7 @@
     "@rcrb/risk-engine": "workspace:*",
     "@rcrb/sources": "workspace:*",
     "@rcrb/sources-mcp": "workspace:*",
+    "@rcrb/webhook-receiver": "workspace:*",
     "commander": "^12.1.0",
     "dotenv": "^16.4.5",
     "kleur": "^4.1.5",
