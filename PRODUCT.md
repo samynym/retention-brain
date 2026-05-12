@@ -77,6 +77,15 @@ The brain is:
 
 The integrations are pluggable, so it works alongside whatever stack you already have.
 
+## Two flavors of intervention
+
+Not every churn signal needs an email. When the user's top driver is a crash, the action that *actually* moves retention is fixing the bug — and the next user who hits the same crash won't churn either. So the agent produces two kinds of output from the same signal foundation:
+
+- **user-play** — drafted retention copy aimed at the at-risk user (channel, offer, timing, subject + body).
+- **engineering-play** — a stabilization ticket aimed at the dev, written as a Markdown file in `engineering-tickets/` with title, severity, crash evidence, proposed investigation, and likely fix direction. No Linear/Jira required; the Markdown files can be fed into whatever workflow already exists.
+
+Crash-driven users get the engineering-play. Retention-risk users get the user-play. Some users get both.
+
 ## What it explicitly is NOT
 
 - Not a CRM
@@ -84,10 +93,3 @@ The integrations are pluggable, so it works alongside whatever stack you already
 - Not a paywall designer (RC ships that)
 - Not multi-tenant SaaS — runs locally or self-hosted
 - Not "an AI to do all your growth" — focused on one job (catching at-risk paying users) and doing it well
-
-## The strategic bet
-
-If "the next layer of subscription tools is autonomous decisioning, not better dashboards" is right, then per-user retention intervention is one of the highest-leverage decisions to automate first. Building it open-source with real evals is a credible argument that you can think and ship at this layer.
-
-- Worst case: you have a useful tool you can run on any subscription app you ever build.
-- Best case: it becomes RC's next product (or your own startup).

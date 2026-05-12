@@ -1,6 +1,14 @@
 import type { Event, Intervention, UserTimeline } from "@rcrb/core";
 import type { RiskScore } from "@rcrb/risk-engine";
 
+/** Lightweight reference to a written engineering-tickets/<file>.md. */
+export type EngineeringTicketRef = {
+  user_id: string;
+  filename: string;
+  title: string;
+  severity: "low" | "medium" | "high";
+};
+
 export type BriefingInput = {
   date: Date;
   cutoffIso: string;
@@ -10,6 +18,10 @@ export type BriefingInput = {
   timelinesByUser: Map<string, UserTimeline>;
   interventions: Intervention[];
   enabledSources: string[];
+  /** Engineering tickets drafted from crash signals. The renderer references
+   *  them by user_id and shows the filename pointer; the ticket bodies
+   *  live in their own files under engineering-tickets/. */
+  engineeringTickets?: EngineeringTicketRef[];
   /** Top-N at-risk users to render in detail (default 5). */
   topN?: number;
 };
@@ -39,6 +51,12 @@ export function renderBriefing(input: BriefingInput): string {
   lines.push(
     `**Account summary:** ${input.totalUsers} subscribers · ${flagged.length} flagged at risk (≥${input.threshold.toFixed(2)}) · top driver: ${topDriver}`
   );
+  if (input.engineeringTickets && input.engineeringTickets.length > 0) {
+    lines.push("");
+    lines.push(
+      `**Engineering plays drafted:** ${input.engineeringTickets.length} stabilization ticket(s) in \`./engineering-tickets/\` (crash-driven users; see "Engineering plays" section below).`
+    );
+  }
   lines.push("");
   lines.push(
     `_Sources: ${input.enabledSources.length > 0 ? input.enabledSources.join(", ") : "(none)"} · cutoff: ${input.cutoffIso}_`
@@ -52,6 +70,9 @@ export function renderBriefing(input: BriefingInput): string {
   }
 
   const interventionsByUser = new Map(input.interventions.map((i) => [i.user_id, i]));
+  const engPlaysByUser = new Map(
+    (input.engineeringTickets ?? []).map((t) => [t.user_id, t])
+  );
 
   // Promote users with a drafted intervention into the top-N detail section so
   // the reader sees actionable emails first; users where the agent recommended
@@ -76,8 +97,28 @@ export function renderBriefing(input: BriefingInput): string {
   atRisk.sort(sortByActionThenScore);
   winBack.sort(sortByActionThenScore);
 
-  renderSection(lines, "At-risk users (not yet canceled)", atRisk, topN, input, interventionsByUser);
-  renderSection(lines, "Recent cancels — win-back candidates", winBack, topN, input, interventionsByUser);
+  renderSection(lines, "At-risk users (not yet canceled)", atRisk, topN, input, interventionsByUser, engPlaysByUser);
+  renderSection(lines, "Recent cancels — win-back candidates", winBack, topN, input, interventionsByUser, engPlaysByUser);
+
+  if (input.engineeringTickets && input.engineeringTickets.length > 0) {
+    lines.push("## Engineering plays — stabilization tickets");
+    lines.push("");
+    lines.push(
+      "Drafted from users whose top driver is `error_rate` or who hit 2+ crashes in the last 14 days. " +
+        "Each ticket is a starting point for the dev (no separate engineering team assumed) — verify root cause before shipping a fix."
+    );
+    lines.push("");
+    const bySeverity = ["high", "medium", "low"] as const;
+    const ordered = [...input.engineeringTickets].sort(
+      (a, b) => bySeverity.indexOf(a.severity) - bySeverity.indexOf(b.severity)
+    );
+    for (const t of ordered) {
+      lines.push(
+        `- [${t.severity.toUpperCase()}] \`${t.user_id}\` — [${t.title}](./engineering-tickets/${t.filename})`
+      );
+    }
+    lines.push("");
+  }
 
   return lines.join("\n");
 }
@@ -88,7 +129,8 @@ function renderSection(
   ranked: RiskScore[],
   topN: number,
   input: BriefingInput,
-  interventionsByUser: Map<string, Intervention>
+  interventionsByUser: Map<string, Intervention>,
+  engPlaysByUser: Map<string, EngineeringTicketRef>
 ): void {
   if (ranked.length === 0) return;
 
@@ -100,7 +142,8 @@ function renderSection(
     const score = ranked[i]!;
     const timeline = input.timelinesByUser.get(score.user_id);
     const intervention = interventionsByUser.get(score.user_id);
-    lines.push(...renderUserBlock(i + 1, score, timeline, intervention));
+    const engPlay = engPlaysByUser.get(score.user_id);
+    lines.push(...renderUserBlock(i + 1, score, timeline, intervention, engPlay));
     lines.push("");
   }
 
@@ -110,8 +153,12 @@ function renderSection(
     for (const s of ranked.slice(topN)) {
       const top = s.top_signals[0];
       const driver = top ? top.name : "—";
-      const noAction = !interventionsByUser.has(s.user_id);
-      const suffix = noAction ? " · agent: no_op (risk borderline)" : "";
+      const hasUserPlay = interventionsByUser.has(s.user_id);
+      const hasEngPlay = engPlaysByUser.has(s.user_id);
+      let suffix = "";
+      if (hasEngPlay && !hasUserPlay) suffix = " · agent: engineering-play only";
+      else if (hasEngPlay && hasUserPlay) suffix = " · agent: user + engineering play";
+      else if (!hasUserPlay) suffix = " · agent: no_op (risk borderline)";
       lines.push(`- \`${s.user_id}\` — risk ${s.score.toFixed(2)} · top: ${driver}${suffix}`);
     }
     lines.push("");
@@ -138,7 +185,8 @@ function renderUserBlock(
   rank: number,
   score: RiskScore,
   timeline: UserTimeline | undefined,
-  intervention: Intervention | undefined
+  intervention: Intervention | undefined,
+  engPlay: EngineeringTicketRef | undefined
 ): string[] {
   const out: string[] = [];
   const label = timeline?.email ?? score.user_id;
@@ -187,9 +235,25 @@ function renderUserBlock(
     out.push(intervention.copy.body);
     out.push("```");
     out.push("");
+  } else if (engPlay) {
+    out.push("**Recommended play**");
+    out.push(
+      `- Engineering action drafted — see [\`engineering-tickets/${engPlay.filename}\`](./engineering-tickets/${engPlay.filename}) (${engPlay.severity}). No user-directed email this run; stabilize first, then re-evaluate.`
+    );
+    out.push("");
   } else {
     out.push("**Recommended play**");
     out.push("- Agent recommended no action — signal too borderline to warrant a retention email yet. Re-evaluate at next run.");
+    out.push("");
+  }
+
+  if (intervention && engPlay) {
+    // User got both kinds of play: surface the engineering side too so the
+    // dev knows there's a stabilization ticket queued alongside the email.
+    out.push("**Engineering play**");
+    out.push(
+      `- [\`engineering-tickets/${engPlay.filename}\`](./engineering-tickets/${engPlay.filename}) (${engPlay.severity})`
+    );
     out.push("");
   }
 
