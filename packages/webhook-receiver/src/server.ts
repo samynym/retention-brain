@@ -9,6 +9,13 @@ export type WebhookServerOptions = {
   storePath: string;
   stripeWebhookSecret?: string;
   revenueCatWebhookSecret?: string;
+  /**
+   * Allow inbound webhooks without signature verification. Off by default.
+   * When false (default), a request to a path whose secret is unset returns 503.
+   * Pass true only for local sandbox testing — the README and CLI surface this
+   * as `--insecure`.
+   */
+  allowInsecure?: boolean;
   onEvent?: (info: { source: "stripe" | "revenuecat"; kind: string; user_id: string }) => void;
 };
 
@@ -64,6 +71,9 @@ async function handle(
         reply(res, 401, { error: "stripe signature mismatch" });
         return;
       }
+    } else if (!opts.allowInsecure) {
+      reply(res, 503, { error: "STRIPE_WEBHOOK_SECRET not set; pass --insecure to accept unsigned" });
+      return;
     }
     const body = safeParse(raw);
     const event = mapStripeWebhook(body);
@@ -85,6 +95,9 @@ async function handle(
         reply(res, 401, { error: "revenuecat auth mismatch" });
         return;
       }
+    } else if (!opts.allowInsecure) {
+      reply(res, 503, { error: "REVENUECAT_WEBHOOK_SECRET not set; pass --insecure to accept unsigned" });
+      return;
     }
     const body = safeParse(raw);
     const event = mapRevenueCatWebhook(body);
@@ -133,7 +146,14 @@ function safeParse(raw: string): unknown {
 
 // Stripe signature format: t=timestamp,v1=hex,v0=hex
 // Per https://docs.stripe.com/webhooks/signatures — only v1 is current.
-export function verifyStripeSignature(raw: string, header: string, secret: string): boolean {
+// toleranceSec defends against replay: rejects payloads whose timestamp is
+// more than ±toleranceSec from now. Stripe's recommended default is 300.
+export function verifyStripeSignature(
+  raw: string,
+  header: string,
+  secret: string,
+  opts: { toleranceSec?: number; nowSec?: number } = {}
+): boolean {
   if (!header || !secret) return false;
   const parts = header.split(",").reduce<Record<string, string>>((acc, p) => {
     const [k, v] = p.split("=");
@@ -143,6 +163,13 @@ export function verifyStripeSignature(raw: string, header: string, secret: strin
   const ts = parts.t;
   const v1 = parts.v1;
   if (!ts || !v1) return false;
+
+  const toleranceSec = opts.toleranceSec ?? 300;
+  const nowSec = opts.nowSec ?? Math.floor(Date.now() / 1000);
+  const tsNum = Number(ts);
+  if (!Number.isFinite(tsNum)) return false;
+  if (Math.abs(nowSec - tsNum) > toleranceSec) return false;
+
   const signed = `${ts}.${raw}`;
   const expected = createHmac("sha256", secret).update(signed).digest("hex");
   return safeEq(expected, v1);
