@@ -50,6 +50,7 @@ program
   .description("Start an HTTP webhook receiver for RC + Stripe; appends events to .rcrb/events.jsonl")
   .option("--port <n>", "HTTP port", "4044")
   .option("--store <path>", "event log file", ".rcrb/events.jsonl")
+  .option("--insecure", "accept unsigned webhooks (sandbox testing only — do not use in production)")
   .action(runWebhookListen);
 
 program

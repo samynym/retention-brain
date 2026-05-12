@@ -15,26 +15,60 @@ async function post(port: number, path: string, body: string, headers: Record<st
 }
 
 describe("verifyStripeSignature", () => {
-  it("accepts a valid v1 signature", () => {
+  it("accepts a valid v1 signature within tolerance", () => {
     const raw = '{"id":"evt_1"}';
     const ts = "1746230400";
     const sig = createHmac("sha256", "whsec_test").update(`${ts}.${raw}`).digest("hex");
     const header = `t=${ts},v1=${sig}`;
-    expect(verifyStripeSignature(raw, header, "whsec_test")).toBe(true);
+    expect(
+      verifyStripeSignature(raw, header, "whsec_test", { nowSec: Number(ts) + 10 })
+    ).toBe(true);
   });
 
   it("rejects a tampered body", () => {
     const ts = "1746230400";
     const sig = createHmac("sha256", "whsec_test").update(`${ts}.original`).digest("hex");
-    expect(verifyStripeSignature("tampered", `t=${ts},v1=${sig}`, "whsec_test")).toBe(false);
+    expect(
+      verifyStripeSignature("tampered", `t=${ts},v1=${sig}`, "whsec_test", {
+        nowSec: Number(ts) + 10,
+      })
+    ).toBe(false);
+  });
+
+  it("rejects a replayed payload past the freshness window", () => {
+    const raw = '{"id":"evt_1"}';
+    const ts = "1746230400";
+    const sig = createHmac("sha256", "whsec_test").update(`${ts}.${raw}`).digest("hex");
+    const header = `t=${ts},v1=${sig}`;
+    expect(
+      verifyStripeSignature(raw, header, "whsec_test", { nowSec: Number(ts) + 301 })
+    ).toBe(false);
+  });
+
+  it("rejects a future-dated payload past the tolerance window", () => {
+    const raw = '{"id":"evt_1"}';
+    const ts = "1746230400";
+    const sig = createHmac("sha256", "whsec_test").update(`${ts}.${raw}`).digest("hex");
+    const header = `t=${ts},v1=${sig}`;
+    expect(
+      verifyStripeSignature(raw, header, "whsec_test", { nowSec: Number(ts) - 301 })
+    ).toBe(false);
+  });
+
+  it("rejects a non-numeric timestamp", () => {
+    const raw = '{"id":"evt_1"}';
+    const sig = createHmac("sha256", "whsec_test").update(`not-a-ts.${raw}`).digest("hex");
+    expect(
+      verifyStripeSignature(raw, `t=not-a-ts,v1=${sig}`, "whsec_test")
+    ).toBe(false);
   });
 });
 
 describe("webhook server e2e", () => {
-  it("stores a Stripe webhook event with no signature secret configured", async () => {
+  it("stores a Stripe webhook event in insecure sandbox mode", async () => {
     const dir = mkdtempSync(join(tmpdir(), "rcrb-srv-"));
     const storePath = join(dir, "events.jsonl");
-    const handle = await startWebhookServer({ port: 0, storePath });
+    const handle = await startWebhookServer({ port: 0, storePath, allowInsecure: true });
     try {
       const body = JSON.stringify({
         id: "evt_stripe_test",
@@ -55,10 +89,28 @@ describe("webhook server e2e", () => {
     }
   });
 
-  it("stores a RevenueCat webhook event", async () => {
+  it("returns 503 when STRIPE_WEBHOOK_SECRET is unset and allowInsecure is false", async () => {
     const dir = mkdtempSync(join(tmpdir(), "rcrb-srv-"));
     const storePath = join(dir, "events.jsonl");
     const handle = await startWebhookServer({ port: 0, storePath });
+    try {
+      const body = JSON.stringify({
+        id: "evt_x",
+        type: "invoice.payment_failed",
+        created: 1,
+        data: { object: { customer: "cus_X", metadata: { app_user_id: "u_42" } } },
+      });
+      const { status } = await post(handle.port, "/webhooks/stripe", body);
+      expect(status).toBe(503);
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it("stores a RevenueCat webhook event", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rcrb-srv-"));
+    const storePath = join(dir, "events.jsonl");
+    const handle = await startWebhookServer({ port: 0, storePath, allowInsecure: true });
     try {
       const body = JSON.stringify({
         event: {
