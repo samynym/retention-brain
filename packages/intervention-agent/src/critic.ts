@@ -9,7 +9,11 @@ const CriticSchema = z.object({
     tone: z.number().min(1).max(5),
     plausibility: z.number().min(1).max(5),
   }),
-  notes: z.string().max(280),
+  // GPT-4o regularly returns critique notes in the 300-500 char range when it has
+  // multiple dimensions of feedback. 280 was too tight and caused silent critic
+  // failures (the parent run.ts catches and logs but the critique field stays
+  // empty in the briefing). 800 leaves headroom without inviting essay-length.
+  notes: z.string().max(800),
   recommendation: z.enum(["accept", "revise", "reject"]),
 });
 

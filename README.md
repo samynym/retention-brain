@@ -1,6 +1,14 @@
 # rc-retention-brain
 
-A continuous, per-user retention agent for subscription apps. Reads each user's full timeline across your tools, scores churn risk, and writes a markdown briefing with personalized retention plays — one per at-risk user, with the actual copy ready to send.
+A per-user retention agent for subscription apps. Reads each user's full timeline across your tools (RevenueCat, Stripe, Sentry, PostHog — any MCP server), scores churn risk per user, and writes a briefing of personalized retention plays — channel, offer, timing, and the email copy itself, drafted to reference what *that* user actually did.
+
+**Operator's analyst, today. Operator, soon.** Existing subscription tooling tells you what happened (Rico, Mixpanel, the RC dashboard) or lets you build flows yourself (Customer.io, Braze). v1.0 of this brain decides what to do per user, drafts the email, and hands it back for you to send. v1.1 graduates to actually sending it, one channel at a time, as the agent earns your trust.
+
+**Two gradients you control:**
+- **Sources:** Start with one key (RevenueCat alone is enough). Add Stripe, Sentry, PostHog, or any MCP server as you want more signal.
+- **Trust:** Start at briefing-only. Promote to approve-each, then per-channel autonomy, then policy-based autonomy. You decide when each step is earned.
+
+See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the mental model behind both gradients. [`PRODUCT.md`](./PRODUCT.md) and [`SPEC.md`](./SPEC.md) are the full design.
 
 ## Install in 3 minutes
 
@@ -16,9 +24,24 @@ Edit `.rcrb/mcp.json` to point at your tools (RevenueCat, Stripe, PostHog, Sentr
 
 ## What's in a briefing
 
-Per at-risk user: why they're at risk (which signals fired, with their actual events as evidence), and a recommended play — channel, offer, timing, and the email copy itself, drafted to reference what *that* user did. A sample briefing lives at [`examples/briefing-sample.md`](./examples/briefing-sample.md).
+Two flavors of intervention, from the same signal foundation:
 
-For the full design see [`PRODUCT.md`](./PRODUCT.md) and [`SPEC.md`](./SPEC.md).
+- **User-play** — per at-risk user: why they're at risk (which signals fired, with their actual events as evidence), a recommended play (channel, offer, timing), and the email copy itself — drafted to reference what *that* user did, not a template.
+- **Engineering-play** — per crash-driven user: a Markdown stabilization ticket written to `engineering-tickets/<date>-<user_id>-<slug>.md` with title, severity, crash evidence, proposed investigation, and a likely-fix direction. No Linear/Jira required; pipe the files into whatever workflow you already use.
+
+A sample briefing with real LLM-drafted copy lives at [`examples/briefing-sample.md`](./examples/briefing-sample.md); the engineering-tickets folder it references lives at [`examples/engineering-tickets/`](./examples/engineering-tickets/).
+
+## Real eval numbers
+
+The risk engine is tested on a held-out seed with pre-registered thresholds (no median-of-churners p-hacking). Real numbers from the test suite:
+
+```
+threshold=0.4   precision=0.698   recall=0.757
+threshold=0.5   precision=0.709   recall=0.746
+threshold=0.6   precision=0.606   recall=0.228
+```
+
+[`ARCHITECTURE.md §4`](./ARCHITECTURE.md#4-risk-engine-hybrid-heuristic--llm-judge) explains the eval methodology (train/eval seed split, non-self-judging critic, explicit `llm_judge_available` field).
 
 ## LLM provider
 

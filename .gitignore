@@ -12,3 +12,7 @@ interventions/
 /temporal-holdout-*.md
 /.staged-future.json
 /.rcrb/
+/.aide/
+/engineering-tickets/
+/briefing-view.html
+PLAN.md

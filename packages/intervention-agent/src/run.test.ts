@@ -31,5 +31,5 @@ describe.skipIf(!HAS_KEY)("intervention agent (live LLM)", () => {
       expect(i.copy.body.length).toBeGreaterThan(20);
       expect(i.channel).not.toBe("no_op");
     }
-  }, 60_000);
+  }, 180_000);
 });

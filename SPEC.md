@@ -1,329 +1,284 @@
-# rc-retention-brain — Spec
+# rc-retention-brain — Technical Spec
 
-**Status:** Spec v3 · 2026-05-08 (post-debate revision)
-**Pace:** Side project, ~5–6 weekends, no fixed deadline
-**Format:** Public open-source GitHub repo (MIT). No web demo, no Loom — the repo + a real briefing are the artifact.
-**Positioning:** A continuous, cross-source, per-user retention agent for subscription apps. Built for personal validation; **DM Jacob at v1.0** — when he can install it and run it on a real RC + Stripe sandbox in under 10 minutes and see a useful briefing.
+A continuous, per-user retention agent for subscription apps. Reads each user's full timeline across the tools that produce signal (RevenueCat, Stripe, Sentry, PostHog, or any MCP server), scores churn risk per user, and produces two flavors of intervention: drafted retention copy for the user, and Markdown stabilization tickets for the dev. v1.0 stops at writing artifacts to disk; v1.x graduates to executing them.
+
+For the design philosophy and framework decisions, see [`ARCHITECTURE.md`](./ARCHITECTURE.md). For the install path, see [`README.md`](./README.md). This document covers the concrete deliverables, schemas, quality bars, and phase plan.
 
 ---
 
-## Thesis
+## Status
 
-> *Subscription dashboards tell you what happened. Retention agents decide what to do — per individual user, in real time, before they cancel.*
+- **Current version:** v0.1.0 tagged. Full agent loop runs end-to-end on synthetic data with passing evals.
+- **Live-data path (MCP):** All four canonical sources (RevenueCat, Stripe, Sentry, PostHog) are wired via their MCP servers — no vendor SDKs in the dependency graph. Webhook receiver (Stripe HMAC + RC shared-secret verification, both `timingSafeEqual`) handles RC + Stripe forward-capture for `payment.failure` and other events the official MCPs don't expose as batch tools.
+- **Eval methodology:** Train/eval seed split, pre-registered thresholds (0.4, 0.5, 0.6), non-self-judging critic (different model for compose vs critique). Reported numbers (synthetic held-out seed): precision 0.698 / recall 0.757 at threshold 0.4.
+- **Outputs:** Markdown briefing (`briefing-<date>.md`) + engineering-tickets (`engineering-tickets/<date>-<user_id>-<slug>.md`) when crash signals warrant.
 
-Even the best subscription tooling stops at metrics + cohort nudges. The next layer is an **operator**: a continuous, cross-source, per-user agent that watches your subscription business and decides — for each at-risk user, individually — channel, offer, timing, and copy. Approval gates while it learns trust; autonomous within guardrails when earned.
+---
 
-`rc-retention-brain` is that operator. v0 proves the architecture on synthetic data; v1 makes it real and installable on a real subscription stack (RC + Stripe + Sentry + PostHog).
+## Quality bars
 
-## v1 = the DM bar
+These are gates that have to be met before a version tag is cut. No release should ship without all of these being green for that version.
 
-The DM is sent when v1 ships. v1 means Jacob can:
+### v1.0 quality bars
 
-```
-$ npx rc-retention-brain init
-> Paste your RC API key (optional if Stripe is set):
-> Paste your Stripe API key (optional if RC is set):
-> Paste your Sentry auth token (optional, recommended):
-> Paste your PostHog personal API key (optional, recommended):
-> Paste your Resend API key (optional, only for v1.1 --send):
+- [x] All `*.test.ts` files green in CI (heuristic-only path; live LLM tests skip cleanly without API key)
+- [x] All live LLM tests pass locally with `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` exported
+- [x] Risk engine reports precision ≥ 0.65 and recall ≥ 0.70 at threshold 0.4 on the held-out seed
+- [x] Intervention critic produces avg ≥ 4/5 on the rubric for synthetic personas with clear signals
+- [x] LLM judge handles paid-but-not-using and crashes-then-silence patterns correctly (prompt-tested against contradiction-prone cases)
+- [x] `examples/briefing-sample.md` is a non-trivial, end-to-end sample showing the operator-tier output (user-plays + engineering-plays + critic verdicts)
+- [x] `pnpm rcrb init` writes a valid `.env` and `.rcrb/mcp.json` interactively
+- [x] `pnpm rcrb run` produces a usable briefing in under 10 minutes on a freshly-cloned machine + freshly-seeded sandbox
+- [x] Webhook receiver enforces signature verification when `STRIPE_WEBHOOK_SECRET` / `REVENUECAT_WEBHOOK_SECRET` are set (fails closed)
+- [x] No vendor SDK imports anywhere in `packages/sources*` (MCP-only architecture preserved)
 
-$ npx rc-retention-brain seed-sandbox        # populates RC + Stripe sandboxes with realistic users
-$ npx rc-retention-brain run
-🧠 Reading subscription state: 1,247 subscribers from RC + Stripe
-🐞 Reading Sentry: 312 users with errors in last 14 days
-📊 Reading PostHog: 1,247 users matched, usage decline computed
-🧮 Risk engine: 73 users flagged at risk
-🤖 Intervention agent: generating briefings for top 20…
+### v1.1 quality bars (planned — "the operator" milestone)
 
-→ Briefing written to ./briefing-2026-05-08.md
-→ 20 intervention drafts in ./interventions/
-→ (v1 ships briefing-only. --send is v1.x.)
-```
+- [ ] `rcrb approve` walks each pending intervention; user can approve, edit (`$EDITOR`), skip, or quit
+- [ ] Three execution channels live, with per-channel test mode as the default-default:
+  - **Email** via Resend (behind `RESEND_MODE=test|live`)
+  - **Push** via OneSignal or FCM (behind a similar test-mode flag)
+  - **RevenueCat Promotional Offers** — issuing StoreKit / Play Billing discounts or trial extensions via the RC API (the native-in-app retention channel)
+- [ ] `.rcrb/outcomes.jsonl` ledger captures every send / skip / mark, append-only, schema-stable across versions
+- [ ] Next briefing includes a "Since last briefing" panel populated from the ledger
+- [ ] `rcrb sync-tickets --target=<github|linear|none>` (optional adapter) pipes the engineering-tickets folder to whatever the user already uses
 
-Clone, paste keys (you only need ≥1 of {RC, Stripe} to start), seed if needed, run, get a real retention briefing in <10 minutes. Sub-bar = DM is premature.
+---
 
-**v1 must deliver on four points of differentiation from existing subscription tooling:**
+## Architecture summary
 
-| Differentiator | v1 implementation |
-|---|---|
-| Per-user (vs aggregate) | Risk + intervention generated per subscriber |
-| Continuous (vs on-demand) | `--watch` mode that polls events on schedule |
-| Cross-source (vs single-tool) | **4 sources:** RC, Stripe, Sentry, PostHog (≥1 of {RC, Stripe} required; Sentry + PostHog optional) |
-| Decision-oriented (vs metrics-only) | Generates structured `Intervention` per user — channel, offer, timing, copy, reasoning |
-
-**Why 4 sources, not 7 or 1:** Each source provides an orthogonal signal dimension that no single tool sees together — RC/Stripe for subscription state, Sentry for errors-as-churn-signal (the novel angle), PostHog for usage decline. More than 4 is feature-list cosplay before any one of them is proven; fewer leaves obvious churn signals on the table. Source 5+ slot into the same `Source` interface in v1.x as the architecture earns trust.
-
-**Briefing-first, sending-later.** v1 ships the briefing path only — the agent generates structured `Intervention` objects, writes them to disk, prints the briefing. **No `--send` in v1.** Real email dispatch is v1.x once briefing trust is earned. This collapses the trust ask: installing v1 cannot, by design, send anything to your customers.
-
-## What ships when
-
-### v0 (synthetic prove-out — Weeks 1–4)
-
-A working CLI on synthetic data:
+For the full design, read [`ARCHITECTURE.md`](./ARCHITECTURE.md). The short version:
 
 ```
-$ npx rc-retention-brain demo
-
-🧠 Loading synthetic stream: 1000 users, 30 days of events
-📊 Risk Engine: scoring users… done
-   • 47 flagged at risk (>0.70)
-   • Top signals: usage decline (28), payment failures (12), support sentiment (7)
-
-🤖 Intervention Agent: generating plays for top at-risk users…
-
-User alice@example.com (risk 0.89)
-  Why: 3 weeks declining sessions, opened cancel page yesterday
-  Play: in-app · 20% off annual · loss-aversion framing · next session
-  Copy: "Hey Alice — we noticed [feature] usage drop. Stay with us, save 20%…"
-
-✅ Eval: predictions hit 78% precision / 65% recall vs synthetic ground truth
-   Intervention quality (LLM-judge): 4.2/5 avg
+                ┌─────────────────────────────────────────────┐
+                │  Sources (MCP servers, plus webhook MCP)    │
+                │  RevenueCat · Stripe · Sentry · PostHog ·   │
+                │  any other MCP-shaped data source            │
+                └────────────────────┬────────────────────────┘
+                                     │  normalized Event[]
+                                     ▼
+                  ┌────────────────────────────────┐
+                  │       Risk Engine              │
+                  │  6 heuristic signals           │
+                  │  + LLM judge (narrative)       │
+                  │  → RiskScore + top signals     │
+                  └─────────────┬──────────────────┘
+                                │  per-user RiskScore
+                                ▼
+                  ┌────────────────────────────────┐
+                  │      Intervention Agent        │
+                  │  • user-play sub-pipeline:     │
+                  │     channel → offer → timing   │
+                  │     → compose → critic         │
+                  │  • engineering-play:           │
+                  │     crash-driven users get a   │
+                  │     stabilization ticket       │
+                  └─────────────┬──────────────────┘
+                                │
+                  ┌─────────────┴──────────────┐
+                  ▼                            ▼
+        briefing-<date>.md         engineering-tickets/
+        (Markdown briefing with    <date>-<user_id>-<slug>.md
+         user-plays inline)        (per-user stabilization
+                                    tickets, severity-ranked)
 ```
 
-Goal of v0: prove the four pillars work end-to-end on synthetic data, with passing evals. No real connectors, no real sends.
+Source-agnostic event schema is the contract that holds the system together. Every connector — synthetic, MCP-backed, webhook-backed — produces events matching the same shape, which means new sources slot in without touching the risk engine or intervention agent.
 
-### v1 (the DM milestone — Weeks 5–7)
+---
 
-Same CLI, real connectors, real action capability:
+## Core schemas
 
-- Real **RC connector** (REST API + webhook listener)
-- Real **Stripe connector** (REST API + webhook listener)
-- Real **Resend connector** for action execution (`--dry-run` default, `--send` opt-in)
-- `--watch` mode for continuous polling
-- Install path: clone → paste keys → first useful output in <10 min
-- README is install-first, thesis-second
+The three load-bearing types live in `packages/core/src/`.
 
-## What v1 is NOT
+### `Event`
 
-- ❌ No web UI / dashboard (CLI + structured Markdown briefings only)
-- ❌ No Mixpanel / Amplitude / Sentry / Intercom connectors (slot in v1.1+ via the same interface)
-- ❌ No outcome learning loop (`v1.5`)
-- ❌ No multi-tenant / hosted version
-- ❌ No action channels beyond email (push, in-app, dunning fixes deferred)
-
-## Architecture
-
-```
-rc-retention-brain/
-├── README.md                       # Install-first, thesis-second
-├── packages/
-│   ├── core/                       # Source-agnostic types + interfaces
-│   │   ├── events.ts               # normalized event schema (matches RC + Stripe shapes)
-│   │   ├── user-timeline.ts        # per-user merged event stream
-│   │   └── intervention.ts         # the structured output type
-│   │
-│   ├── sources/                    # Event ingestion (synthetic or real)
-│   │   ├── source.ts               # interface every source implements
-│   │   ├── synthetic/              # Simulator (v0)
-│   │   │   ├── personas/
-│   │   │   ├── ground-truth.ts
-│   │   │   └── generate.ts
-│   │   ├── revenuecat/             # v1: real RC connector
-│   │   │   ├── webhook.ts          # listener
-│   │   │   └── api.ts              # backfill via REST
-│   │   └── stripe/                 # v1: real Stripe connector
-│   │       ├── webhook.ts
-│   │       └── api.ts
-│   │
-│   ├── risk-engine/                # Per-user churn risk
-│   │   ├── signals/                # individual extractors (work on normalized timeline)
-│   │   │   ├── usage-decline.ts
-│   │   │   ├── payment-health.ts
-│   │   │   ├── support-sentiment.ts
-│   │   │   ├── lifecycle-stage.ts
-│   │   │   └── engagement-recency.ts
-│   │   ├── llm-judge.ts            # narrative risk reasoning
-│   │   └── score.ts                # combined risk + top contributing signals
-│   │
-│   ├── intervention-agent/         # The decision
-│   │   ├── decide-channel.ts
-│   │   ├── decide-offer.ts
-│   │   ├── decide-timing.ts
-│   │   └── compose.ts
-│   │
-│   ├── channels/                   # Action execution (v1: email-only)
-│   │   ├── channel.ts              # interface
-│   │   ├── dry-run.ts              # default — writes intervention to disk
-│   │   └── resend/                 # v1: real Resend connector
-│   │
-│   ├── eval/                       # Quality bars
-│   │   ├── prediction.ts           # precision/recall vs synthetic ground truth
-│   │   ├── intervention.ts         # LLM-as-judge with a rubric
-│   │   ├── rubric.md               # versioned, reviewable
-│   │   └── report.ts               # markdown eval report
-│   │
-│   └── cli/                        # `npx rc-retention-brain {demo|init|run|watch|eval}`
-│
-├── examples/
-│   ├── demo-1000-users.json        # canonical synthetic dataset (committed)
-│   └── briefing-sample.md          # what a real briefing looks like
-│
-└── docs/
-    ├── architecture.md
-    ├── extending.md                # how to add a signal, channel, or source
-    ├── rubric.md
-    └── roadmap.md
+```ts
+{
+  id:        string
+  user_id:   string
+  kind:      "subscription.purchase" | "subscription.renewal" | "subscription.cancel" |
+             "subscription.refund" | "subscription.trial_start" | "subscription.trial_end" |
+             "payment.success" | "payment.failure" | "payment.retry" |
+             "usage.session" | "usage.feature" |
+             "support.ticket_open" | "support.ticket_message" | "support.ticket_close" |
+             "error.client" | "error.crash" |
+             "review.submitted"
+  timestamp: ISO-8601 string
+  source:    "synthetic" | "revenuecat" | "stripe" | "mixpanel" | "sentry" |
+             "crisp" | "posthog" | "firebase" | "mcp"
+  payload:   Record<string, unknown>
+}
 ```
 
-## Build order
+### `RiskScore`
 
-### v0 phase — synthetic prove-out
+```ts
+{
+  user_id:              string
+  score:                number          // [0, 1], 0.8 * heuristic + 0.2 * llm_judge
+  top_signals:          Signal[]        // top 3 contributing, by score * weight
+  narrative:            string          // 1-sentence explanation
+  llm_judge_available:  boolean         // false if the judge call failed
+}
+```
 
-**Week 1 — Core types + Simulator**
-- Define normalized `Event` and `Intervention` types (match RC + Stripe shapes)
-- Synthetic source: ≥6 personas (Loyal, Wavering, Lapsing, Fresh, Power, Lapsed-returning, Free-rider)
-- Ground-truth labels (who churns, when, why)
-- Eval scaffolding running from day 1 (even before signals exist)
+### `Intervention` (user-play)
 
-**Week 2 — Risk Engine**
-- Per-user score in [0,1] + top 3 contributing signals + 1-sentence narrative
-- Hybrid: heuristic signals + LLM judge over user timeline
-- **Quality bar:** ≥75% precision @ 50% recall on synthetic ground truth
+```ts
+{
+  user_id:        string
+  risk_score:     number
+  channel:        "email" | "push" | "in_app" | "dunning_fix" | "no_op"
+  offer: {
+    kind:         "discount_percent" | "discount_amount" | "extension_days" |
+                  "upgrade_incentive" | "feature_unlock" | "none"
+    value?:       number
+  }
+  timing:         "immediate" | "next_session" | "within_24h" | "before_renewal"
+  copy: {
+    subject?:     string         // omitted for push / in_app
+    body:         string         // ≤ 800 chars
+  }
+  reasoning:      string         // "channel: X | offer: Y | timing: Z"
+  predicted_lift: { direction, confidence, note }
+  critique?:     {                // from non-self-judging critic
+    scores: { relevance, personalization, tone, plausibility }  // each ∈ [1, 5]
+    notes:  string
+    recommendation: "accept" | "revise" | "reject"
+  }
+}
+```
 
-**Week 3 — Intervention Agent**
-- Specialist sub-agents (channel → offer → timing → copy) → composer → critic pass
-- Output `Intervention { user_id, channel, offer, timing, copy, reasoning, predicted_lift }`
-- **Quality bar:** LLM-as-judge avg ≥4/5 on rubric (relevance, personalization, tone, plausibility)
+### `EngineeringTicket` (engineering-play)
 
-**Week 4 — Eval polish + v0 CLI**
-- `npx rc-retention-brain demo` works end-to-end on synthetic data
-- Evals enforced in CI
-- v0 tagged
+```ts
+{
+  user_id:   string
+  filename:  string               // suggested file name
+  markdown:  string               // full ticket body to write
+  copy: {
+    title:           string
+    summary:         string
+    proposed_action: string
+    fix_direction?:  string       // LLM-inferred root-cause guess
+    severity:        "low" | "medium" | "high"
+  }
+}
+```
 
-### v1 phase — real connectors + ship (autonomous Claude execution)
+---
 
-Time in **agent-hours**, not weekends. Plausibly 2-3 focused weekends wall-clock, including key provisioning and seed-sandbox setup.
+## Build phases (what shipped, in implementation order)
 
-**Phase 5.5 — Eval methodology fixes (~3-4 agent-hrs)**
+### Phase 0 — Core types + synthetic source
+Define the normalized `Event` schema. Implement a synthetic event generator with ≥6 personas (Loyal, Wavering, Lapsing, Fresh, Power, Crashy-Loyal, Silent-Lurker) and ground-truth labels for eval.
 
-The post-v0 debate flagged the eval as the weakest link. Fix before adding real connectors so v1 has trustworthy numbers:
-- **Train/eval seed split** — different seeds for tuning weights vs. reporting numbers
-- **Pre-registered thresholds** — drop the median-of-churners threshold pick; assert at fixed thresholds (0.4, 0.5, 0.6) and report all of them
-- **Adversarial personas** added to simulator (re-engagers who look lapsing then return; happy users who happen to crash a lot) so signals can't trivially match generator parameters
-- **Critic uses a different model than composer** in eval mode, OR ensemble of two models — to break the Sonnet-judges-Sonnet closed loop
-- **Surface critic verdict on `Intervention`** — not just `console.warn`, so eval can correlate critic accept-rate with downstream signals
-- **LLM judge availability tracked** as an explicit field on `RiskScore`, not silently substituted to 0 on error
+### Phase 1 — Risk engine
+Six heuristic signals (`usage_decline`, `payment_health`, `support_sentiment`, `lifecycle_stage`, `engagement_recency`, `error_rate`), each with score / weight / reason. LLM judge for narrative reasoning. Combined score: `0.8 * heuristic + 0.2 * judge`. Quality bar: ≥ 65% precision at 50% recall on held-out synthetic.
 
-**Phase 6 — Connector foundation + 4 real source connectors (~10-14 agent-hrs)**
+### Phase 2 — Intervention agent
+Sub-agent pipeline: `decide-channel` → `decide-offer` + `decide-timing` (parallel) → `compose` → `critic`. Each step is a typed `generateObject` call. Critic uses a different model than composer to break self-judging loops. Quality bar: avg ≥ 4/5 on the eval rubric for synthetic personas.
 
-Generic `Source` interface (already exists). User matching strategy module (email-primary with `app_user_id` metadata fallback). Then 4 connectors:
+### Phase 3 — Briefing renderer + CLI
+`renderBriefing()` produces the Markdown briefing. CLI commands: `init`, `run`, `demo`, `eval`, `webhook-listen`, `events-mcp-server`. `init` is interactive (validates keys, refuses to overwrite an existing `.env`).
 
-1. **RevenueCat** — REST API + webhook listener. Subscribers, transactions, entitlements
-2. **Stripe** — REST + webhook. Customers, subscriptions, invoices, charge.failed, payment_method events
-3. **Sentry** — Issues API + user-tied events. *Novel angle: errors as per-user churn predictor*
-4. **PostHog** — Persons API + Events. Activity decline + engagement recency
+### Phase 4 — Eval methodology fixes
+Train/eval seed split, pre-registered thresholds (no median-of-churners p-hacking), non-self-judging critic, `llm_judge_available` tracked as explicit field (not silently substituted on failure).
 
-Constraint: ≥1 of {RC, Stripe} must be configured at runtime. Sentry + PostHog are pure-optional. CLI prints clear errors if no subscription source is wired.
+### Phase 5 — MCP-only source adapter
+Universal MCP source adapter (`@rcrb/sources-mcp`). Every source is declared in `.rcrb/mcp.json` with `command` (stdio) or `url` (http), a `tool` name, and an optional `mapper` (`config` for field-path mapping, `llm` for arbitrary-record-to-event conversion). No vendor SDKs anywhere in the codebase.
 
-Each connector ships with: API client, webhook listener (where applicable), event schema mapper, user matcher, smoke test, README section.
+### Phase 6 — Webhook receiver
+Plugs the gap in RC + Stripe MCPs that lack batch event-by-date-range tools. `rcrb webhook-listen` accepts `/webhooks/stripe` (HMAC SHA256 with `timingSafeEqual`) and `/webhooks/revenuecat` (shared-secret bearer auth). Captures events to `.rcrb/events.jsonl`. A companion `rcrb events-mcp-server` fronts the same file as a stdio MCP, so the brain reads webhook-captured events through the same MCP interface as everything else.
 
-**Phase 7 — Briefing renderer + seed-sandbox + temporal holdout (~4-5 agent-hrs)**
+### Phase 7 — Engineering-play
+Detection: a user is eligible for an engineering-play when `error_rate` is in their top signals OR they hit 2+ crashes in the last 14 days. The agent drafts a stabilization ticket (title, summary, severity, proposed action, optional fix direction), writes it as Markdown to `engineering-tickets/<date>-<user_id>-<slug>.md`, and the briefing renderer references each ticket inline alongside the relevant user.
 
-- `npx rc-retention-brain run [--as-of <date>]` writes `briefing-<date>.md` (markdown briefing the user reads). `--as-of` lets you evaluate at a specific cutoff date instead of "now."
-- `npx rc-retention-brain seed-sandbox --train-days 30 --eval-days 30` populates RC + Stripe + (optional) Sentry + PostHog with ~50 realistic users for the train window only, staging the eval window locally for later reveal.
-- `npx rc-retention-brain reveal-future` pushes the staged eval window to the sandboxes, then computes a **temporal holdout eval**: of the users flagged at the cutoff, how many actually churned in the eval window? Of churners, how many were caught? Reports real precision/recall/F1 on real-API data.
-- `--watch` mode for continuous polling of webhook-friendly sources
+### Phase 8 — Install polish + sandbox eval pipeline
+`rcrb init` interactive setup. `rcrb seed-sandbox --train-days 30 --eval-days 30` populates RC + Stripe sandboxes with realistic users in a train window only. `rcrb reveal-future` pushes the staged eval window to the sandboxes and computes a **temporal-holdout eval** (real precision / recall / F1 on real-API data at a fixed cutoff). This is the v1.0 evaluation methodology — the closest thing to real-world deployment without real users.
 
-**The temporal holdout is the v1 evaluation methodology.** It's the closest thing to real-world deployment without real users — the brain only sees train-window events, predicts, then we compare to actuals. This is what gets put in the DM: real numbers, real APIs, real time-correctness, no peeking at future data.
+---
 
-**No `--send` channel in v1.** Resend connector is deferred to v1.x. Briefing-first is the trust ask v1 makes.
+## Validation methodology
 
-**Phase 8 — Install polish + DM-readiness (~3-5 agent-hrs)**
-- `npx rc-retention-brain init` — interactive key paste, writes `.env`
-- README rewritten — install-first paragraph, real briefing screenshot embedded, thesis paragraph 2
-- Screen recording from `git clone` to first real briefing on a clean machine + fresh sandbox — under 10 minutes, otherwise fix install before DM
-- Eval suite green on synthetic + spot-check on the seeded sandbox
-- DM drafted, sleep on it, send
+| Stage | Data source | Goal | Status |
+|---|---|---|---|
+| v0 | Synthetic event stream with ground-truth labels | Prove the architecture works end-to-end; pass quality bars on heuristic + LLM-judge + intervention pipeline | ✅ shipped |
+| v0.5 | Synthetic + adversarial personas, seed split | Trustworthy eval methodology before real-data eval | ✅ shipped |
+| v1.0 | Real RC + Stripe sandboxes + Sentry + PostHog (all via MCP), seeded with ~50 realistic users, train/eval temporal split | Live-data briefing + engineering-tickets, install-and-go in <10 min, temporal-holdout numbers reported in README | ready |
+| v1.x | Real-app data from anyone who chooses to install it | Real users, real outcomes, learning loop bootstraps from `outcomes.jsonl` | planned |
 
-The eval suite + rubric carry through every phase — no phase ships without passing evals.
+**Path A (locked):** Sandbox-only validation for v1.0. The `seed-sandbox` script populates real RC + Stripe sandboxes (plus optional Sentry + PostHog) with realistic events split into train + eval windows; the brain runs at the cutoff date; `reveal-future` then pushes the eval window and computes actual-vs-predicted metrics. This proves install + sources + briefing format + time-correct prediction on real systems. It does not prove real-world signal quality on real-user behavior — that's v1.x territory.
 
-## Validation path
+The contract layer (normalized `Event` and `Intervention` types) matches real RC webhook + Stripe event payloads, so the v0 → v1 transition is "swap source via MCP config," not a rewrite.
 
-| Stage | Data source | Goal |
-|---|---|---|
-| v0 ✅ | Synthetic stream | Prove the architecture; pass eval bars |
-| v0.5 (Phase 5.5) | Synthetic + adversarial personas, seed-split | Trustworthy eval methodology before real data |
-| v1.0 | RC sandbox + Stripe test + Sentry + PostHog, seeded with ~50 realistic users | Real-API briefing, install-and-go in <10 min — **DM trigger** |
-| v1.1+ | Real production app (yours or a friend's via outreach) | Real users, real outcomes |
-
-**Path A (locked):** Sandbox-only validation for v1. The seed-sandbox script populates real RC/Stripe/Sentry/PostHog sandboxes with realistic events split into train + eval windows; the brain runs against real APIs at the cutoff date; `reveal-future` then pushes the eval window and computes actual-vs-predicted metrics. This proves install + connectors + briefing format + time-correct prediction on real systems. It does not prove real-world signal quality on real-user behavior — that's v1.1+ when real-app data appears.
-
-The contract layer (normalized `Event` and `Intervention` types) matches real RC webhook + Stripe event payloads, so the v0 → v1 transition is "swap source," not a rewrite.
+---
 
 ## Roadmap
 
-- **v0** ✅ — Synthetic-only, four pillars, CLI demo, evals
-- **v0.5** — Eval methodology fixes (seed split, adversarial personas, pre-registered thresholds, non-self-judging critic)
-- **v1.0 — DM trigger.** 4 sources (RC, Stripe, Sentry, PostHog), ≥1 of {RC, Stripe} required. Briefing-only (no send). `--watch` mode. seed-sandbox script. Install in <10 min on sandboxes.
-- **v1.1** — Resend channel + `--send` (briefing-trust-earned upgrade)
-- **v1.2** — Mixpanel / Amplitude connector (PostHog alternative)
-- **v1.3** — Crisp / Intercom connector (support sentiment)
-- **v1.4** — Firebase Analytics + Crashlytics (Android/Firebase-only coverage)
-- **v1.5** — App reviews source (AppFollow / Appfigures) + OneSignal push channel
-- **v1.6** — Outcome learning loop (track intervention → outcome → refine rubric)
-- **v2.0** — Hostable as a service (only if real users emerge)
+- **v0** ✅ — Synthetic-only, four pillars, CLI demo, evals.
+- **v0.5** ✅ — Eval methodology fixes (seed split, adversarial personas, pre-registered thresholds, non-self-judging critic).
+- **v1.0** — MCP-only brain with briefing + engineering-tickets, both as Markdown artifacts. 4 canonical sources wired (RC, Stripe, Sentry, PostHog); ≥1 of {RC, Stripe} required at runtime. `--watch` mode. seed-sandbox + reveal-future for temporal-holdout eval. Install in <10 min on sandboxes.
+- **v1.1 — The operator.** Trust ladder Level 1: `rcrb approve` walks each pending intervention; approved interventions execute. Three execution channels land together: **Resend email**, **push** (OneSignal / FCM), and **RevenueCat Promotional Offers** (the native-in-app channel — issuing StoreKit / Play Billing offers via the RC API, the most-native retention play possible for an RC merchant). Outcomes ledger (`.rcrb/outcomes.jsonl`) appends every send / skip / mark. Optional `rcrb sync-tickets` adapter pipes the engineering-tickets folder to Linear / GitHub Issues / wherever.
+- **v1.2 — Outcome learning loop.** Training signal from `outcomes.jsonl` feeds back into prompt rubric and signal weights so the agent gets better at this specific app over time. This is the long-term moat — outcome data accumulates per-install and nobody else has it.
+- **v1.x — Higher trust levels.** Level 2 (per-channel trust: "auto-send push, ask before email"), Level 3 (per-policy trust: "auto-send offers <20%"), Level 5 (reactive real-time — fires off the existing webhook receiver). Each level is opt-in per channel; revoke any time.
 
-## Why open source
+**Adding new sources is NOT a roadmap item.** The MCP-only architecture means a new source (Mixpanel, Amplitude, Crisp, Intercom, Firebase, App Store reviews, whatever ships an MCP server next) is a JSON entry in `.rcrb/mcp.json` — no new package, no new version. Source coverage grows as users want it, independently of the trust-and-execution roadmap above.
 
-- **Receipts.** A repo with clean architecture, real tests, real evals = receipts no Loom can match.
-- **Compounds.** Stars, PRs, issues = continuous proof of taste over time.
-- **Defensible direction.** RC's own roadmap is extending Rico (deeper analysis, more proactive nudges); cross-source per-user real-time operator is genuinely the next ring out, not their immediate next ship.
-- **Optionality.** If RC hires you, this becomes part of how you'd build their next layer. If they don't, it's a side project that could become a real product.
+### Hosted service: open question, not on the active roadmap
 
-## Quality bars (the bar that matters)
+A managed-hosted version ("plug in your RC + Stripe keys on a website, briefings show up without running anything yourself") would solve a real friction: not every RC merchant wants to maintain a webhook server, a cron job, or a CLI workflow. But it adds significant infra complexity, single-tenancy assumptions, and a billing surface that this project does not currently have. It is recorded as an open question that could be answered by real-install demand, not a committed milestone.
+
+---
+
+## Quality principles
 
 - **No marketing language in the README.** Thesis-first, code second, no hype.
-- **Every component has a rubric.** "Good intervention" must be defined, not vibes.
+- **Every component has a rubric.** "Good intervention" is defined in `packages/eval/src/rubric.md`, not vibes.
 - **Evals are CI-enforced.** Quality regressions can't ship.
 - **Architecture is extensible by design.** Adding a new signal / channel / source is one folder, no surgery.
-- **Demo is reproducible.** One command, deterministic output, lives forever.
+- **Demo is reproducible.** One command, deterministic seed, lives forever.
+- **Failure modes are visible, not papered over.** When the LLM judge fails or returns something low-confidence, the `RiskScore` reflects it explicitly. When the critic disagrees with the composer, the verdict shows up in the briefing.
+
+---
 
 ## Risks & mitigations
 
 | Risk | Mitigation |
 |---|---|
-| Synthetic data feels toy-ish | Personas grounded in real subscription patterns; ground truth labels make evals legitimate |
-| Risk engine is just heuristics with extra steps | LLM judge does *narrative* reasoning over the timeline — that's the genuine novelty |
-| Intervention agent outputs feel generic | Critic sub-agent pass; rubric enforces personalization |
-| Project drifts into perpetual side-project | Each weekend has a deliverable; evals provide objective "is this good yet" signal |
-| No real RC/Stripe sandbox to test against | Sign up for free RC dev account + Stripe test mode (both free, ~30 min total) |
-| Jacob installs and it breaks on his side | Install path tested on a clean machine before DM; smoke test scripted |
-| `--send` accidentally fires real emails | Default `--dry-run`; `--send` requires explicit opt-in; Resend test mode is default-default |
-| Rico ships exactly this in 6 months | Then you've validated your read on the roadmap; the open-source angle, code quality, and cross-source breadth are still differentiated |
+| Synthetic data feels toy-ish | Personas grounded in real subscription patterns; ground-truth labels make evals legitimate; temporal-holdout on real sandboxes is the v1.0 eval bar |
+| Risk engine is just heuristics with extra steps | LLM judge does narrative reasoning over the timeline — that's the genuine differentiation. `llm_judge_available` makes the contribution visible per-user. |
+| Intervention agent outputs feel generic | Critic sub-agent pass; rubric enforces personalization; anti-slop system prompts ("no emojis, no clickbait subjects") |
+| Engineering-play is too AI-slop to be useful | Tickets reference actual crash events from the timeline; the "fix direction" field is explicitly LLM-inferred and flagged as such; the dev is expected to verify before shipping |
+| Project drifts into perpetual side-project | Each phase has a deliverable; evals provide objective "is this good yet" signal |
+| `--send` (v1.1) accidentally fires real emails | Default `--dry-run`; `--send` requires explicit opt-in; Resend test mode is default-default |
+| LLM judge mis-classifies paid-but-not-using as "low risk" | Prompt explicitly names this pattern and forces the judge to compute days-since-last-session; documented as a known failure mode in ARCHITECTURE.md §4 |
+
+---
 
 ## What we're explicitly NOT doing (to keep scope honest)
 
-- Multi-tenant infra
-- Auth, billing, accounts
-- A web UI (CLI + structured JSON only)
-- Real provider connectors in v0
-- Outcome tracking / learning loop in v0
-- "Agentic monetization brain" framing in the README — too grandiose, will make people roll eyes. Position as "v0 of a per-user retention operator."
+- Multi-tenant hosted infra
+- Auth, billing, accounts (the brain is a local CLI, not a SaaS)
+- A web UI / dashboard — the Markdown briefing IS the UI; `briefing-view.html` is an optional navigable view, not the primary surface
+- Real-time push send in v1.0 — briefing + engineering-tickets are written to disk; the human executes
+- Linear / Jira native integration in v1.0 — Markdown files in `engineering-tickets/` are the open ticket format; a `rcrb sync-tickets` adapter is v1.1 territory
+- Outcome learning loop in v1.0 — the ledger captures data; the loop that uses it is v1.6
 
-## DM (sent at v1.0 — not before)
+---
 
-The DM is a v1.0 milestone, not a v0 thing. v1.0 means Jacob can install in <10 min and run the brain on his own RC sandbox. Until that's true, no DM.
+## Definition of v1.0 done
 
-When v1.0 ships, the DM writes itself in the shape of:
+A v1.0 tag goes out only when all of these are true:
 
-> Beat 1 — thesis (2–3 sentences): Rico is a great analyst. The next layer is an operator — continuous, cross-source, per-user, action-oriented. Here's why that's the next ring out, not what he'll ship next.
->
-> Beat 2 — proof (2–3 sentences): Built it: github.com/samy/rc-retention-brain. Reads RC + Stripe, scores per-user churn risk, generates personalized interventions, can dispatch via Resend. Install in <10 min: `npx rc-retention-brain init`. Eval suite included.
->
-> Close: One line. "Up for 15 min?" — no marketing, no hype, no asks.
+1. Clone → first useful output on a real RC + Stripe sandbox in under 10 minutes
+2. README is install-first; thesis fits in the second paragraph
+3. `--watch` mode runs continuously without crashing for ≥ 1 hour
+4. Eval suite passes the v0 quality bars on synthetic data and spot-checks reasonably on real sandbox data
+5. Briefing renders correctly with both user-plays and engineering-tickets populated when signals warrant
+6. Webhook receiver enforces signature verification when secrets are set; fail-open behavior is documented
+7. Repo has CI green, MIT license, contribution doc, working `examples/` (briefing-sample.md, engineering-tickets/, mcp.json)
+8. `rcrb doctor` (the diagnostic command, v1.0 cherry-pick) flags account mismatches in the configured keys
 
-Wording locked at v1.0 ship — wrong time to optimize now.
-
-## Definition of v1 done (the bar)
-
-Don't send the DM until **all** of these are true:
-
-1. Clone → first useful output on a real RC + Stripe sandbox in <10 min
-2. README is install-first; thesis fits in paragraph 2
-3. `--watch` mode runs continuously without crashing for ≥1 hour
-4. Eval suite passes the v0 quality bars on synthetic data + spot-checks reasonably on real data
-5. `--send` is gated, default `--dry-run` is honest about being a dry run
-6. Repo has CI green, MIT license, contribution doc, working `examples/`
-7. You'd actually use it on your own subscription app if you had one
-
-Anything less = not v1 yet = no DM.
+Anything less = not v1.0 yet.
