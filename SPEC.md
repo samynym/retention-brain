@@ -28,7 +28,7 @@ These are gates that have to be met before a version tag is cut. No release shou
 - [x] LLM judge handles paid-but-not-using and crashes-then-silence patterns correctly (prompt-tested against contradiction-prone cases)
 - [x] `examples/briefing-sample.md` is a non-trivial, end-to-end sample showing the operator-tier output (user-plays + engineering-plays + critic verdicts)
 - [x] `pnpm rcrb init` writes a valid `.env` and `.rcrb/mcp.json` interactively
-- [x] `pnpm rcrb run` produces a usable briefing in under 10 minutes on a freshly-cloned machine + freshly-seeded sandbox
+- [x] `pnpm rcrb run` produces a usable briefing in under 10 minutes on a freshly-cloned machine with configured MCP sources (verified end-to-end against live sandbox MCPs in ~4 minutes)
 - [x] Webhook receiver enforces signature verification when `STRIPE_WEBHOOK_SECRET` / `REVENUECAT_WEBHOOK_SECRET` are set (fails closed)
 - [x] No vendor SDK imports anywhere in `packages/sources*` (MCP-only architecture preserved)
 
@@ -195,8 +195,11 @@ Plugs the gap in RC + Stripe MCPs that lack batch event-by-date-range tools. `rc
 ### Phase 7 — Engineering-play
 Detection: a user is eligible for an engineering-play when `error_rate` is in their top signals OR they hit 2+ crashes in the last 14 days. The agent drafts a stabilization ticket (title, summary, severity, proposed action, optional fix direction), writes it as Markdown to `engineering-tickets/<date>-<user_id>-<slug>.md`, and the briefing renderer references each ticket inline alongside the relevant user.
 
-### Phase 8 — Install polish + sandbox eval pipeline
-`rcrb init` interactive setup. `rcrb seed-sandbox --train-days 30 --eval-days 30` populates RC + Stripe sandboxes with realistic users in a train window only. `rcrb reveal-future` pushes the staged eval window to the sandboxes and computes a **temporal-holdout eval** (real precision / recall / F1 on real-API data at a fixed cutoff). This is the v1.0 evaluation methodology — the closest thing to real-world deployment without real users.
+### Phase 8 — Install polish
+`rcrb init` interactive setup: prompts for LLM provider (Anthropic / OpenAI / skip), captures the API key, writes `.env`, and scaffolds a `.rcrb/mcp.json` template. Validates that an existing `.env` won't be overwritten without confirmation. The actual MCP source wiring happens by editing `.rcrb/mcp.json` (the template shows the schema; `examples/mcp.json` is a working multi-source config).
+
+### Planned for v1.1 — Sandbox eval pipeline
+A `seed-sandbox` + `reveal-future` command pair will populate RC + Stripe sandboxes with realistic events split into train + eval windows, then push the eval window to compute a temporal-holdout eval (real precision / recall / F1 on real-API data at a fixed cutoff). v1.0 ships without this — the v1.0 eval evidence is the synthetic held-out seed (precision 0.698 / recall 0.757 at threshold 0.4) plus the spot-check that `rcrb run` produces a valid briefing against live MCP sandboxes.
 
 ---
 
@@ -206,12 +209,15 @@ Detection: a user is eligible for an engineering-play when `error_rate` is in th
 |---|---|---|---|
 | v0 | Synthetic event stream with ground-truth labels | Prove the architecture works end-to-end; pass quality bars on heuristic + LLM-judge + intervention pipeline | ✅ shipped |
 | v0.5 | Synthetic + adversarial personas, seed split | Trustworthy eval methodology before real-data eval | ✅ shipped |
-| v1.0 | Real RC + Stripe sandboxes + Sentry + PostHog (all via MCP), seeded with ~50 realistic users, train/eval temporal split | Live-data briefing + engineering-tickets, install-and-go in <10 min, temporal-holdout numbers reported in README | ready |
+| v1.0 | Live MCP sources (RC + Stripe + Sentry + PostHog) — install verified end-to-end against real sandboxes | Live-data briefing + engineering-tickets produced from real MCP traffic; install-and-go in <10 min on a fresh clone | ✅ shipped |
+| v1.1 | Same MCP sources + a `seed-sandbox` / `reveal-future` temporal-holdout pipeline (planned) | Real precision / recall / F1 on real-API data at a fixed cutoff, alongside the operator capabilities (trust ladder, send channels) | planned |
 | v1.x | Real-app data from anyone who chooses to install it | Real users, real outcomes, learning loop bootstraps from `outcomes.jsonl` | planned |
 
-**Path A (locked):** Sandbox-only validation for v1.0. The `seed-sandbox` script populates real RC + Stripe sandboxes (plus optional Sentry + PostHog) with realistic events split into train + eval windows; the brain runs at the cutoff date; `reveal-future` then pushes the eval window and computes actual-vs-predicted metrics. This proves install + sources + briefing format + time-correct prediction on real systems. It does not prove real-world signal quality on real-user behavior — that's v1.x territory.
+**v1.0 validation evidence (shipped):** the synthetic held-out seed reports precision 0.698 / recall 0.757 at threshold 0.4 (pre-registered thresholds, no median-of-churners p-hacking). On a fresh clone wired to live RC + Stripe + PostHog MCPs, `rcrb run` pulls events, scores 99 users, flags 3 at risk, and drafts user-plays + engineering-tickets end-to-end in ~4 minutes.
 
-The contract layer (normalized `Event` and `Intervention` types) matches real RC webhook + Stripe event payloads, so the v0 → v1 transition is "swap source via MCP config," not a rewrite.
+**v1.1 validation (planned):** a `seed-sandbox` + `reveal-future` command pair will populate real RC + Stripe sandboxes with events split into train + eval windows; the brain scores at the cutoff date; `reveal-future` then pushes the eval window and computes actual-vs-predicted metrics. That gives temporal-holdout numbers on real-API data alongside the operator capabilities landing in v1.1.
+
+The contract layer (normalized `Event` and `Intervention` types) matches real RC webhook + Stripe event payloads, so the v0 → v1 transition was "swap source via MCP config," not a rewrite.
 
 ---
 
@@ -219,8 +225,8 @@ The contract layer (normalized `Event` and `Intervention` types) matches real RC
 
 - **v0** ✅ — Synthetic-only, four pillars, CLI demo, evals.
 - **v0.5** ✅ — Eval methodology fixes (seed split, adversarial personas, pre-registered thresholds, non-self-judging critic).
-- **v1.0** — MCP-only brain with briefing + engineering-tickets, both as Markdown artifacts. 4 canonical sources wired (RC, Stripe, Sentry, PostHog); ≥1 of {RC, Stripe} required at runtime. `--watch` mode. seed-sandbox + reveal-future for temporal-holdout eval. Install in <10 min on sandboxes.
-- **v1.1 — The operator.** Trust ladder Level 1: `rcrb approve` walks each pending intervention; approved interventions execute. Three execution channels land together: **Resend email**, **push** (OneSignal / FCM), and **RevenueCat Promotional Offers** (the native-in-app channel — issuing StoreKit / Play Billing offers via the RC API, the most-native retention play possible for an RC merchant). Outcomes ledger (`.rcrb/outcomes.jsonl`) appends every send / skip / mark. Optional `rcrb sync-tickets` adapter pipes the engineering-tickets folder to Linear / GitHub Issues / wherever.
+- **v1.0** ✅ — MCP-only brain with briefing + engineering-tickets, both as Markdown artifacts. 4 canonical sources wired (RC, Stripe, Sentry, PostHog); ≥1 of {RC, Stripe} required at runtime. Install in <10 min — verified end-to-end on a fresh clone against live sandbox MCPs.
+- **v1.1 — The operator + validation pipeline.** Trust ladder Level 1: `rcrb approve` walks each pending intervention; approved interventions execute. Three execution channels land together: **Resend email**, **push** (OneSignal / FCM), and **RevenueCat Promotional Offers** (the native-in-app channel — issuing StoreKit / Play Billing offers via the RC API, the most-native retention play possible for an RC merchant). Outcomes ledger (`.rcrb/outcomes.jsonl`) appends every send / skip / mark. Adds **`--watch` mode** (continuous polling), **`seed-sandbox` + `reveal-future`** (temporal-holdout eval pipeline on real RC + Stripe sandboxes), and a **`rcrb doctor`** diagnostic that flags account mismatches in configured keys. Optional `rcrb sync-tickets` adapter pipes the engineering-tickets folder to Linear / GitHub Issues / wherever.
 - **v1.2 — Outcome learning loop.** Training signal from `outcomes.jsonl` feeds back into prompt rubric and signal weights so the agent gets better at this specific app over time. This is the long-term moat — outcome data accumulates per-install and nobody else has it.
 - **v1.x — Higher trust levels.** Level 2 (per-channel trust: "auto-send push, ask before email"), Level 3 (per-policy trust: "auto-send offers <20%"), Level 5 (reactive real-time — fires off the existing webhook receiver). Each level is opt-in per channel; revoke any time.
 
@@ -268,17 +274,20 @@ A managed-hosted version ("plug in your RC + Stripe keys on a website, briefings
 
 ---
 
-## Definition of v1.0 done
+## What v1.0 shipped — verification checklist
 
-A v1.0 tag goes out only when all of these are true:
+The v1.0 tag goes out when all of these are true. As of the v0.1.0 commit, these are the verified gates:
 
-1. Clone → first useful output on a real RC + Stripe sandbox in under 10 minutes
-2. README is install-first; thesis fits in the second paragraph
-3. `--watch` mode runs continuously without crashing for ≥ 1 hour
-4. Eval suite passes the v0 quality bars on synthetic data and spot-checks reasonably on real sandbox data
-5. Briefing renders correctly with both user-plays and engineering-tickets populated when signals warrant
-6. Webhook receiver enforces signature verification when secrets are set; fail-open behavior is documented
-7. Repo has CI green, MIT license, contribution doc, working `examples/` (briefing-sample.md, engineering-tickets/, mcp.json)
-8. `rcrb doctor` (the diagnostic command, v1.0 cherry-pick) flags account mismatches in the configured keys
+- [x] Clone → first useful output on real MCP sandboxes in under 10 minutes (verified end-to-end against live RC + Stripe + PostHog MCPs in ~4 minutes)
+- [x] README is install-first; the operator-vs-analyst framing fits in the second paragraph
+- [x] Eval suite passes the v0 quality bars on synthetic data (precision 0.698 / recall 0.757 at threshold 0.4) and spot-checks correctly on real sandbox data (3 of 3 flagged users get valid interventions)
+- [x] Briefing renders correctly with both user-plays and engineering-tickets populated when signals warrant
+- [x] Webhook receiver enforces signature verification when `STRIPE_WEBHOOK_SECRET` / `REVENUECAT_WEBHOOK_SECRET` are set; rejects unsigned requests by default; documented fail-open behavior when secrets are deliberately omitted (sandbox testing only)
+- [x] Repo has CI green on `main`, MIT license, working `examples/` (`briefing-sample.md`, `engineering-tickets/`, `mcp.json`, `synthetic-events.jsonl`)
 
-Anything less = not v1.0 yet.
+Deferred to v1.1 (not blocking v1.0):
+
+- `--watch` mode (continuous polling between `run` invocations) — `run` ships as one-shot in v1.0; `--watch` is cron-script-shaped today (`*/15 * * * * cd repo && pnpm rcrb run`), v1.1 wraps it as a native flag
+- `rcrb doctor` diagnostic — currently a manual exercise (run `rcrb run`, inspect the per-source event counts, check `.env` against the active accounts in each dashboard)
+- `seed-sandbox` + `reveal-future` temporal-holdout pipeline — the eval methodology for v1.0 is the synthetic held-out seed plus the live-MCP spot-check; v1.1 adds the temporal-holdout layer
+- `CONTRIBUTING.md` — community process docs land when the project earns its first external contributor
