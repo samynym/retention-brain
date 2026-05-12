@@ -17,18 +17,22 @@ export async function decideChannel(risk: RiskScore): Promise<ChannelDecision> {
     schema: Schema,
     system:
       "You pick the right outreach channel for an at-risk subscription user. " +
-      "Be calibrated. If the user is not clearly at risk, pick no_op.",
+      "Bias toward action: any user the risk engine has flagged (which this call has already filtered for) " +
+      "deserves a deliberate channel choice. " +
+      "Reserve no_op for cases where the signals are genuinely contradictory or where intervention would be counterproductive — " +
+      "do NOT pick no_op merely because the risk score is mid-range or because multiple signals are firing softly. " +
+      "A user with risk ≥0.5 and 2+ signals firing should almost always get a real channel.",
     prompt:
       `User: ${risk.user_id}\n` +
       `Risk score: ${risk.score.toFixed(2)}\n` +
       `Narrative: ${risk.narrative}\n` +
       `Top signals:\n${formatTopSignals(risk, { withScore: true })}\n\n` +
-      `Channel guidance:\n` +
-      `- email: explanations, longer messages, confirmations\n` +
-      `- push: brief nudge, only if user has been engaged recently\n` +
-      `- in_app: only if user is currently active in the app\n` +
-      `- dunning_fix: only if the primary signal is payment_health\n` +
-      `- no_op: low risk, or signals too noisy to act on\n\n` +
+      `Channel guidance — match the dominant signal:\n` +
+      `- dunning_fix: primary signal is payment_health (unrecovered payment failures); needs explanation + fix path\n` +
+      `- email: usage_decline / engagement_recency / support_sentiment — most retention scenarios. Longer messages, explanations, offers.\n` +
+      `- push: brief nudge, only if user has been engaged recently AND signal is soft (push is intrusive)\n` +
+      `- in_app: only if user is currently actively using the app (last session within ~2 days)\n` +
+      `- no_op: signals are noisy, contradictory, OR a recent positive signal cancels the risk. Justify why no action is the right action.\n\n` +
       `Pick exactly one channel. Reason ≤140 chars.`,
   });
   return object;
