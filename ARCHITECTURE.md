@@ -38,17 +38,24 @@ Why split it that way: the trust ask is the hard part. Letting an agent draft 5 
                                                             └─ (human reads, sends manually)
 ```
 
-### What v1.1 is (Level 1 trust)
+### What v1.1 is (Level 1 trust, multi-channel from day one)
 
 ```
 [Sources via MCP] → [Risk engine] → [Intervention agent] → [Outcomes ledger]
                                           ↓
                                    `rcrb approve`
                                           ↓
-                                   [Send via Resend]
+                  ┌───────────┬───────────┬──────────────────────────┐
+                  ↓           ↓           ↓                          ↓
+              [Email]      [Push]      [RC Promotional Offers]    (more channels
+              Resend     OneSignal /   StoreKit / Play Billing      slot in via
+                            FCM           via RC API                 the same
+                                                                  dispatcher)
 ```
 
-### What v1.5+ is (Levels 2-5)
+All three execution channels land together so v1.1 is multi-channel from the moment any send happens. RC Promotional Offers is the most-native channel for an RC merchant (no email or push needed — the discount or trial extension appears in-app via the platform's billing UI), and it's the one Rico can't easily ship because it's outcome-as-action rather than analysis.
+
+### What v1.x is (Levels 2–5)
 
 Per-channel trust ("auto-send push, ask before email"). Per-policy trust ("auto-send discounts under 20%"). Reactive real-time send wired off the webhook receiver. Each level is opt-in per-channel per-source; revoke any time.
 
