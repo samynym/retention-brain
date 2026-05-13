@@ -198,17 +198,11 @@ Detection: a user is eligible for an engineering-play when `error_rate` is in th
 ### Phase 8 — Install polish
 `rcrb init` interactive setup: prompts for LLM provider (Anthropic / OpenAI / skip), captures the API key, writes `.env`, and scaffolds a `.rcrb/mcp.json` template. Validates that an existing `.env` won't be overwritten without confirmation. The actual MCP source wiring happens by editing `.rcrb/mcp.json` (the template shows the schema; `examples/mcp.json` is a working multi-source config).
 
-### Planned for v1.1 — Real-sandbox eval pipeline
+### Eval methodology — synthetic now, real-user later
 
-v1.0 already ships temporal-holdout eval **on synthetic data**: the generator emits events with ground-truth churn labels, the risk engine scores at a cutoff date (only seeing train-window events), and the eval suite (`packages/eval/src/prediction.test.ts`) computes precision / recall / F1 against those labels at pre-registered thresholds. The README's `precision 0.698 / recall 0.757 at threshold 0.4` numbers come from this pipeline running on the held-out `EVAL_SEEDS[0]` seed.
+v1.0 ships temporal-holdout eval **on synthetic data**: the generator emits events with ground-truth churn labels, the risk engine scores at a cutoff date (only seeing train-window events), and the eval suite (`packages/eval/src/prediction.test.ts`) computes precision / recall / F1 against those labels at pre-registered thresholds. The README's `precision 0.698 / recall 0.757 at threshold 0.4` numbers come from this pipeline running on the held-out `EVAL_SEEDS[0]` seed.
 
-What v1.0 does NOT ship is the same pipeline **on real RC + Stripe sandboxes**. A previous `seed-sandbox` + `reveal-future` command pair (built in v0, removed in the MCP-only refactor at commit `1b42571`) populated real sandboxes via Stripe Test Clocks and direct RC subscriber-write APIs — both removed when the codebase went MCP-only. A v1.1 rebuild has to choose:
-
-1. **Deliberate SDK exception for seeding only.** Keep read paths MCP-only, but let seed-sandbox call Stripe + RC SDKs directly because seeding is dev-tooling, not the production data path. Justifiable.
-2. **Wait for write-capable MCPs.** Stripe and RC official MCPs are read-only today. If/when they ship write tools (create_customer, advance_test_clock, etc.), the seed pipeline can be MCP-only.
-3. **Hand-crafted seed files.** Manually craft `events.jsonl` representing a sandbox scenario. Loses the real-API integration verification.
-
-The v1.0 evidence is solid for "the agent works on a representative event stream"; the v1.1 work proves "the agent works on real RC + Stripe API traffic, end-to-end."
+After v1.0 ships, the next eval evidence comes from **real installs on real apps** — anyone who clones the repo and points it at their own RC + Stripe + Sentry + PostHog accounts produces a briefing on their actual users. The outcomes ledger (`.rcrb/outcomes.jsonl`) introduced in v1.1 captures send / skip / mark decisions per user, which then becomes the training signal for the outcome-learning loop in v1.2. The synthetic temporal-holdout stays as the regression-prevention test; real-app outcomes become the quality signal that compounds.
 
 ---
 
@@ -219,14 +213,13 @@ The v1.0 evidence is solid for "the agent works on a representative event stream
 | v0 | Synthetic event stream with ground-truth labels | Prove the architecture works end-to-end; pass quality bars on heuristic + LLM-judge + intervention pipeline | ✅ shipped |
 | v0.5 | Synthetic + adversarial personas, seed split | Trustworthy eval methodology before real-data eval | ✅ shipped |
 | v1.0 | Synthetic temporal-holdout (held-out `EVAL_SEEDS[0]` seed, ground-truth labels, pre-registered thresholds) + live MCP sources (RC + Stripe + Sentry + PostHog) for install + smoke verification | Temporal-holdout numbers on synthetic (precision 0.698 / recall 0.757 at threshold 0.4); live-MCP spot-check produces a valid briefing end-to-end | ✅ shipped |
-| v1.1 | Same + a rebuilt `seed-sandbox` / `reveal-future` pipeline running on real RC + Stripe sandboxes | Temporal-holdout precision / recall / F1 on **real-API data** (not just synthetic), validating that the agent handles real Test Clock timing + real-API event ordering, alongside the operator capabilities (trust ladder, send channels) | planned |
-| v1.x | Real-app data from anyone who chooses to install it | Real users, real outcomes, learning loop bootstraps from `outcomes.jsonl` | planned |
+| v1.1+ | Real-app data from anyone who installs the brain on their own subscription stack | Real users, real interventions sent through the trust ladder, real outcomes accumulating in `outcomes.jsonl` — becomes the training signal for the v1.2 learning loop | planned |
 
 **v1.0 validation evidence (shipped):**
 - Synthetic temporal-holdout on the `EVAL_SEEDS[0]` held-out seed: precision 0.698 / recall 0.757 at threshold 0.4 (pre-registered, no median-of-churners p-hacking). The generator emits events + ground-truth labels; the risk engine scores at a cutoff date; the eval suite computes p/r/f1 against the labels. This is the temporal-holdout methodology, just on synthetic-rather-than-real-API data.
 - Live-MCP spot-check: on a fresh clone wired to live RC + Stripe + PostHog MCPs, `rcrb run` pulls events, scores 99 users, flags 3 at risk, and drafts user-plays + engineering-tickets end-to-end in ~4 minutes.
 
-**v1.1 validation (planned):** the same temporal-holdout methodology, but with the train/eval events pushed into real RC + Stripe sandboxes (via Stripe Test Clocks + RC subscriber writes). The `seed-sandbox` + `reveal-future` commands were built in v0 and removed in the MCP-only refactor at `1b42571`; the rebuild has to decide between a deliberate SDK exception for seeding, waiting for write-capable MCPs, or hand-crafted seed files (see "Planned for v1.1 — Real-sandbox eval pipeline" above).
+**Next evidence (v1.1+):** the next quality signal comes from real installs on real subscription apps. Once the trust ladder + send channels land in v1.1, every install starts populating `.rcrb/outcomes.jsonl` with send / skip / mark decisions. Those outcomes are the training signal for the v1.2 learning loop — they're per-install, accumulating, and unique to that app's user base. The synthetic temporal-holdout stays as a regression-prevention test (CI catches if the risk engine breaks); the real-app outcomes become the quality signal that compounds.
 
 The contract layer (normalized `Event` and `Intervention` types) matches real RC webhook + Stripe event payloads, so the v0 → v1 transition was "swap source via MCP config," not a rewrite.
 
@@ -237,7 +230,12 @@ The contract layer (normalized `Event` and `Intervention` types) matches real RC
 - **v0** ✅ — Synthetic-only, four pillars, CLI demo, evals.
 - **v0.5** ✅ — Eval methodology fixes (seed split, adversarial personas, pre-registered thresholds, non-self-judging critic).
 - **v1.0** ✅ — MCP-only brain with briefing + engineering-tickets, both as Markdown artifacts. 4 canonical sources wired (RC, Stripe, Sentry, PostHog); ≥1 of {RC, Stripe} required at runtime. Temporal-holdout eval on synthetic data with ground-truth labels (precision 0.698 / recall 0.757 at threshold 0.4). Install in <10 min — verified end-to-end on a fresh clone against live sandbox MCPs.
-- **v1.1 — The operator + validation pipeline.** Trust ladder Level 1: `rcrb approve` walks each pending intervention; approved interventions execute. Three execution channels land together: **Resend email**, **push** (OneSignal / FCM), and **RevenueCat Promotional Offers** (the native-in-app channel — issuing StoreKit / Play Billing offers via the RC API, the most-native retention play possible for an RC merchant). Outcomes ledger (`.rcrb/outcomes.jsonl`) appends every send / skip / mark. Adds **`--watch` mode** (continuous polling), **`seed-sandbox` + `reveal-future`** (temporal-holdout eval pipeline on real RC + Stripe sandboxes), and a **`rcrb doctor`** diagnostic that flags account mismatches in configured keys. Optional `rcrb sync-tickets` adapter pipes the engineering-tickets folder to Linear / GitHub Issues / wherever.
+- **v1.1 — The operator.** Trust ladder Level 1: `rcrb approve` walks each pending intervention; approved interventions execute. Three execution channels land together so v1.1 is multi-channel from day one:
+  - **Email** via Resend (behind `RESEND_MODE=test|live`; test mode is the default-default)
+  - **Push** via OneSignal or FCM
+  - **RevenueCat Promotional Offers** — issuing StoreKit / Play Billing offers via the RC API. This is the most-native retention play possible for an RC merchant (no email/push needed; the offer appears natively in-app) and the channel Rico can't easily ship because it's outcome-as-action rather than analysis.
+
+  Outcomes ledger (`.rcrb/outcomes.jsonl`) appends every send / skip / mark, append-only. Optional `rcrb sync-tickets` adapter pipes the engineering-tickets folder to Linear / GitHub Issues / wherever. Smaller deferrals also land here: `--watch` mode for continuous polling, `rcrb doctor` to flag configured-account mismatches.
 - **v1.2 — Outcome learning loop.** Training signal from `outcomes.jsonl` feeds back into prompt rubric and signal weights so the agent gets better at this specific app over time. This is the long-term moat — outcome data accumulates per-install and nobody else has it.
 - **v1.x — Higher trust levels.** Level 2 (per-channel trust: "auto-send push, ask before email"), Level 3 (per-policy trust: "auto-send offers <20%"), Level 5 (reactive real-time — fires off the existing webhook receiver). Each level is opt-in per channel; revoke any time.
 
@@ -300,5 +298,4 @@ Deferred to v1.1 (not blocking v1.0):
 
 - `--watch` mode (continuous polling between `run` invocations) — `run` ships as one-shot in v1.0; `--watch` is cron-script-shaped today (`*/15 * * * * cd repo && pnpm rcrb run`), v1.1 wraps it as a native flag
 - `rcrb doctor` diagnostic — currently a manual exercise (run `rcrb run`, inspect the per-source event counts, check `.env` against the active accounts in each dashboard)
-- `seed-sandbox` + `reveal-future` for **real RC + Stripe sandbox** temporal-holdout — v1.0 already ships temporal-holdout on synthetic data with ground-truth labels (this is what produces the 0.698 / 0.757 numbers); v1.1 adds the real-API version that was removed in the MCP-only refactor at `1b42571`
 - `CONTRIBUTING.md` — community process docs land when the project earns its first external contributor
