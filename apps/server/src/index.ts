@@ -104,7 +104,7 @@ app.get("/api/sources", guardAllowlisted, async (c) => {
   return c.json({ sources: await listSources(user.id) });
 });
 
-// Disconnect a source so it can be reconnected (e.g. swap a test key for live).
+// Disconnect a source so it can be reconnected.
 const SOURCE_KINDS: SourceKind[] = ["stripe", "revenuecat", "sentry", "posthog"];
 app.delete("/api/sources/:kind", guardAllowlisted, async (c) => {
   const user = c.get("user");
@@ -119,15 +119,23 @@ app.post("/api/sources/stripe", guardAllowlisted, async (c) => {
   const user = c.get("user");
   const body = await c.req.json().catch(() => ({}) as Record<string, unknown>);
   const key = typeof body.key === "string" ? body.key.trim() : "";
-  if (!/^(sk|rk)_(test|live)_/.test(key)) {
-    return c.json({ error: "That doesn't look like a Stripe secret/restricted key." }, 400);
+  if (!/^rk_(test|live)_/.test(key)) {
+    return c.json({ error: "Paste a Stripe restricted key that starts with rk_." }, 400);
   }
   try {
-    await new Stripe(key).customers.list({ limit: 1 }); // verify it works
+    const stripe = new Stripe(key);
+    await Promise.all([
+      stripe.customers.list({ limit: 1 }),
+      stripe.subscriptions.list({ limit: 1 }),
+      stripe.charges.list({ limit: 1 }),
+    ]);
   } catch {
-    return c.json({ error: "Stripe rejected that key." }, 400);
+    return c.json(
+      { error: "Stripe rejected that key. Set Customers, Subscriptions, and Charges to Read." },
+      400,
+    );
   }
-  const label = key.startsWith("sk_test_") || key.startsWith("rk_test_") ? "Stripe (test)" : "Stripe";
+  const label = "Stripe";
   await saveSource(user.id, "stripe", label, key);
   return c.json({ ok: true, label });
 });

@@ -19,6 +19,7 @@ export function BriefingScreen({
   gmail,
   onConnectGmail,
   onSignOut,
+  allowFixtures = false,
 }: {
   scenario: Scenario;
   briefing: Briefing | null;
@@ -30,13 +31,15 @@ export function BriefingScreen({
   gmail: ConnState;
   onConnectGmail: () => void;
   onSignOut: () => void;
+  allowFixtures?: boolean;
 }) {
   const live = briefing !== null;
+  const preview = !live && allowFixtures;
 
   // Build the card rows + masthead from either the live briefing or fixtures.
   const rows: CardUser[] = live
     ? briefing.users
-    : scenario === "zero"
+    : !preview || scenario === "zero"
       ? []
       : SAMPLE_BRIEFINGS;
 
@@ -47,9 +50,9 @@ export function BriefingScreen({
     ? briefing.account.medium
     : rows.filter((b) => riskBand(b.risk.score) === "medium").length;
 
-  const appName = live ? "Your subscribers" : ACCOUNT.app;
-  const subscribers = live ? briefing.account.total_users : ACCOUNT.subscribers;
-  const dateIso = live ? briefing.cutoff_iso : ACCOUNT.briefingDate;
+  const appName = live ? "Your subscribers" : preview ? ACCOUNT.app : "Your subscribers";
+  const subscribers = live ? briefing.account.total_users : preview ? ACCOUNT.subscribers : 0;
+  const dateIso = live ? briefing.cutoff_iso : preview ? ACCOUNT.briefingDate : new Date().toISOString();
   const year = new Date(dateIso).getUTCFullYear();
 
   const nudge = briefingNudge(cats);
