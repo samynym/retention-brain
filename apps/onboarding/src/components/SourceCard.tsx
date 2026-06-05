@@ -5,7 +5,8 @@ import type { SourceDef } from "../fixtures/sources";
 /**
  * A connectable source. Connect simulates an OAuth / MCP round-trip; pure mock.
  *
- * Single-provider sources (RevenueCat, Stripe, Sentry) connect on click.
+ * Single-provider OAuth sources (Sentry) connect on click. Key-based sources
+ * (RevenueCat, Stripe) open a small form for the read-only key.
  * Multi-provider slots (analytics, support) first ask *which* tool you use —
  * because the brain connects that tool's MCP server, not a generic one. Pick
  * PostHog and it's PostHog's MCP that authorizes; Mixpanel and Amplitude stay
@@ -21,7 +22,7 @@ export function SourceCard({
   source: SourceDef;
   conn: SourceConn;
   onConnect: (id: string, provider: string) => void;
-  /** real connect for secret_key sources (Stripe) — validates server-side */
+  /** real connect for secret_key sources (Stripe, RevenueCat) — validates server-side */
   onConnectSecret?: (id: string, secret: string) => Promise<{ ok: boolean; error?: string }>;
   /** real connect for oauth sources (Sentry, PostHog) — redirects to the provider */
   onConnectOAuth?: (provider: string) => void;
@@ -33,11 +34,15 @@ export function SourceCard({
   const [secret, setSecret] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [keyError, setKeyError] = useState("");
-  // re-entering a key on an already-connected source (e.g. test → live)
+  // re-entering a key on an already-connected source
   const [editingKey, setEditingKey] = useState(false);
   const connected = conn.status === "connected";
   const connecting = conn.status === "connecting" || submitting;
   const interactive = !connected && !connecting;
+  const connectedLabel =
+    source.connectVia === "secret_key" || source.connectVia === "oauth"
+      ? (source.providers[0] ?? source.name)
+      : (conn.provider ?? "Connected");
 
   async function submitSecret() {
     const key = secret.trim();
@@ -116,7 +121,7 @@ export function SourceCard({
               className="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.06em] uppercase"
               style={{ color: "var(--color-positive)" }}
             >
-              <CheckIcon /> {conn.provider ?? "Connected"}
+              <CheckIcon /> {connectedLabel}
             </span>
             {source.connectVia === "secret_key" && !editingKey && (
               <button
@@ -129,6 +134,16 @@ export function SourceCard({
                 style={{ color: "var(--color-ink-faint)" }}
               >
                 change
+              </button>
+            )}
+            {source.connectVia === "oauth" && onConnectOAuth && source.oauthProvider && (
+              <button
+                type="button"
+                onClick={() => onConnectOAuth(source.oauthProvider!)}
+                className="font-mono text-[10px] tracking-[0.06em] uppercase transition-colors"
+                style={{ color: "var(--color-ink-faint)" }}
+              >
+                reconnect
               </button>
             )}
           </span>
@@ -287,6 +302,37 @@ export function SourceCard({
             <span className="text-[11px] leading-snug" style={{ color: "var(--color-ink-faint)" }}>
               {source.keyHelp}
             </span>
+          )}
+          {source.keyScopes && source.keyScopes.length > 0 && (
+            <div
+              className="flex flex-col gap-1.5 rounded border px-2.5 py-2"
+              style={{
+                borderColor: "var(--color-line)",
+                backgroundColor: "var(--color-raised)",
+              }}
+            >
+              <span
+                className="font-mono text-[9.5px] tracking-[0.08em] uppercase"
+                style={{ color: "var(--color-ink-faint)" }}
+              >
+                Select these permissions
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {source.keyScopes.map((scope) => (
+                  <span
+                    key={scope}
+                    className="rounded border px-2 py-1 font-mono text-[10.5px]"
+                    style={{
+                      borderColor: "var(--color-line-strong)",
+                      color: "var(--color-ink-soft)",
+                      backgroundColor: "var(--color-paper)",
+                    }}
+                  >
+                    {scope}
+                  </span>
+                ))}
+              </div>
+            </div>
           )}
           {source.keyLink && (
             <a
