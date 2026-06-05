@@ -33,6 +33,8 @@ export type SourceDef = {
   /** secret_key slots: guidance shown next to the key input */
   keyHelp?: string;
   keyPlaceholder?: string;
+  /** secret_key slots: exact read permissions the user should select */
+  keyScopes?: string[];
   /** secret_key slots: deep link to where the dev creates the key */
   keyLink?: { url: string; label: string };
   /** oauth slots: the backend connector kind (e.g. "sentry", "posthog") */
@@ -49,8 +51,9 @@ export const BILLING_SOURCES: SourceDef[] = [
     connectVia: "secret_key",
     providers: ["RevenueCat"],
     keyHelp:
-      "Paste a v2 API key with read access (Project settings → API keys → New → V2, read permissions).",
+      "Create a RevenueCat v2 API key with read access, then paste it here.",
     keyPlaceholder: "sk_… (RevenueCat v2)",
+    keyScopes: ["Projects: Read", "Customers: Read", "Subscriptions: Read"],
     keyLink: {
       url: "https://app.revenuecat.com",
       label: "Open RevenueCat API keys →",
@@ -65,8 +68,9 @@ export const BILLING_SOURCES: SourceDef[] = [
     connectVia: "secret_key",
     providers: ["Stripe"],
     keyHelp:
-      "Paste a restricted key (rk_…) with read access to Customers, Subscriptions & Charges.",
+      "Create a restricted key in Stripe, leave write access off, and paste the rk_ key here.",
     keyPlaceholder: "rk_live_… (read-only)",
+    keyScopes: ["Customers: Read", "Subscriptions: Read", "Charges: Read"],
     keyLink: {
       url: "https://dashboard.stripe.com/apikeys/create?name=Retention+Brain",
       label: "Create a read-only key in Stripe →",
