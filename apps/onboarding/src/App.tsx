@@ -41,6 +41,10 @@ function errMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+function isLegacyStripeTestSource(source: { kind: string; label: string | null }): boolean {
+  return source.kind === "stripe" && /\(test\)/i.test(source.label ?? "");
+}
+
 export function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   // Track simulated timers (mock connects) so they're cleared on reset/unmount.
@@ -109,6 +113,10 @@ export function App() {
       .then((sources) => {
         if (!active) return;
         for (const s of sources) {
+          // Old local connects stored test Stripe keys as "Stripe (test)".
+          // Don't treat those as a real connected billing source; show the
+          // normal restricted-key form so the user can replace it.
+          if (isLegacyStripeTestSource(s)) continue;
           dispatch({
             type: "CONNECT_DONE",
             id: kindToSlot[s.kind] ?? s.kind,
@@ -306,6 +314,7 @@ export function App() {
             gmail={state.gmail}
             onConnectGmail={handleConnectGmail}
             onSignOut={handleSignOut}
+            allowFixtures={DEMO}
           />
         </Shell>
       )}
