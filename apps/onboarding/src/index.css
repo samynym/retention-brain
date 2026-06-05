@@ -1,0 +1,289 @@
+@import url("https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+@import "tailwindcss";
+
+/*
+  retention-brain — onboarding mockup
+  Aesthetic: PostHog homage. Cream paper inside a darker textured frame, a
+  chunky grotesque for everything (no serif), monospace for machine-read data.
+  Loud and playful: amber buttons with hard offset shadows, dark-bordered
+  cards, a teal active-state, an orange-red text accent. Risk stays on a calm
+  earthen scale — this product handles billing data and should still read as
+  trusted under all the personality.
+*/
+
+:root {
+  color-scheme: light only;
+}
+
+@theme {
+  /* Grotesk everywhere — Hanken does display + body; mono for data. */
+  --font-display: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  /* Paper + ink — cool slate, deliberately off the warm-cream look. */
+  --color-paper: #e6e9ec;
+  --color-surround: #cdd3d6;
+  --color-raised: #f7f8fa;
+  --color-sunk: #dde1e5;
+  --color-ink: #1b1c1e;
+  --color-ink-soft: #545a60;
+  --color-ink-faint: #8a9097;
+  --color-line: #d7dce0;
+  --color-line-strong: #c1c7cc;
+  /* Hard border for cards, buttons, boxes — the neobrutalist ink edge. */
+  --color-edge: #1b1c1e;
+
+  /* Text accent — orange-red. Legible on cream; used for links, the brand
+     dot, "live" labels, the headline highlight. */
+  --color-accent: #d24a1c;
+  --color-accent-ink: #a8390f;
+  --color-accent-wash: #fbe2d2;
+
+  /* Primary fill — amber. Black text on top, never used as a text color. */
+  --color-yellow: #f5a623;
+  --color-yellow-wash: #fbe7c4;
+
+  /* Active state — teal/mint (tabs, the highlighted content box). */
+  --color-teal: #119c8c;
+  --color-teal-edge: #0d8275;
+  --color-teal-wash: #d6efe9;
+
+  /* Risk scale — earthen, restrained */
+  --color-risk-high: #9a3110;
+  --color-risk-med: #9a6b16;
+  --color-risk-low: #4f6f53;
+
+  --color-positive: #4f9d69;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-surround);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv05", "ss01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* The darker textured frame the cream page sits inside (the PostHog wallpaper
+   surround). Applied to the outermost shell. */
+.ph-surround {
+  background-color: var(--color-surround);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+}
+
+/* Warm paper grain — the cream page surface, subtle atmosphere not a flat fill */
+.paper-grain {
+  background-color: var(--color-paper);
+  background-image:
+    radial-gradient(
+      circle at 18% 10%,
+      rgba(210, 74, 28, 0.04),
+      transparent 36%
+    ),
+    radial-gradient(circle at 90% 4%, rgba(17, 156, 140, 0.04), transparent 40%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+.rule {
+  border: 0;
+  border-top: 1px solid var(--color-line);
+}
+
+/* ---- PostHog homage: buttons, cards, boxes ---------------------------- */
+
+/* The signature hard offset shadow. */
+.ph-shadow {
+  box-shadow: 2px 2px 0 var(--color-edge);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1.5px solid var(--color-edge);
+  border-radius: 8px;
+  font-weight: 600;
+  box-shadow: 2px 2px 0 var(--color-edge);
+  transition:
+    transform 0.08s ease,
+    box-shadow 0.08s ease,
+    background-color 0.15s ease;
+  cursor: pointer;
+}
+.btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--color-edge);
+}
+.btn-primary {
+  background-color: var(--color-ink);
+  color: #f7f8fa;
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: #34373b;
+}
+.btn-secondary {
+  background-color: #ffffff;
+  color: var(--color-ink);
+}
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--color-paper);
+}
+.btn:disabled {
+  cursor: not-allowed;
+  border-color: var(--color-line-strong);
+  background-color: var(--color-sunk);
+  color: var(--color-ink-faint);
+  box-shadow: 2px 2px 0 var(--color-line-strong);
+}
+
+/* Dark-bordered card with a soft hard-shadow — the workhorse container. */
+.ph-card {
+  background-color: #ffffff;
+  border: 1.5px solid var(--color-edge);
+  border-radius: 10px;
+  box-shadow: 3px 3px 0 rgba(29, 27, 22, 0.13);
+}
+
+/* The thick teal-bordered "active" content box (PostHog's product-data panel). */
+.ph-box {
+  background-color: var(--color-raised);
+  border: 2px solid var(--color-teal-edge);
+  border-radius: 12px;
+  box-shadow: 4px 4px 0 rgba(13, 130, 117, 0.16);
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* ---- Motion: one orchestrated reveal, staggered ---- */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(240%);
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.12;
+  }
+}
+
+@keyframes meter {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.rise {
+  opacity: 0;
+  animation: rise 0.62s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+.fade {
+  opacity: 0;
+  animation: fade 0.5s ease forwards;
+}
+
+.sweep {
+  position: relative;
+  overflow: hidden;
+}
+
+.sweep::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(177, 63, 28, 0.18),
+    transparent
+  );
+  animation: sweep 1.15s ease-in-out infinite;
+}
+
+.blink {
+  animation: blink 1.1s step-end infinite;
+}
+
+.meter-fill {
+  transform-origin: left;
+  animation: meter 0.8s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .fade,
+  .meter-fill {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .sweep::after,
+  .blink {
+    animation: none;
+  }
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Editable email fields — look like the rendered email, invite editing on
+   hover/focus with a soft accent ring instead of a hard form border. */
+.email-field {
+  border: 1px solid transparent;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+.email-field:hover:not(:disabled) {
+  border-color: var(--color-line-strong);
+  background-color: rgba(177, 63, 28, 0.02);
+}
+.email-field:focus {
+  border-color: var(--color-accent);
+  background-color: var(--color-raised);
+}
