@@ -1,0 +1,5 @@
+{
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm --filter @retention-brain/onboarding build",
+  "outputDirectory": "apps/onboarding/dist"
+}
