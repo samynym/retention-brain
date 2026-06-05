@@ -1,0 +1,29 @@
+{
+  "name": "@retention-brain/server",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "analyze:dev": "tsx src/dev-analyze.ts",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "@retention-brain/core": "workspace:*",
+    "@retention-brain/intervention-agent": "workspace:*",
+    "@retention-brain/risk-engine": "workspace:*",
+    "@retention-brain/sources-mcp": "workspace:*",
+    "dotenv": "^16.4.5",
+    "hono": "^4.6.0",
+    "stripe": "^17.0.0",
+    "tsx": "^4.19.0",
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
