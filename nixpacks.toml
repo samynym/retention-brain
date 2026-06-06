@@ -1,0 +1,9 @@
+# Railway/Nixpacks config for the backend worker.
+# The server runs TypeScript directly via tsx (the packages export .ts source),
+# so there's no compile step — skip the repo-wide build and just install + start.
+
+[phases.build]
+cmds = []
+
+[start]
+cmd = "pnpm --filter @retention-brain/server start"
