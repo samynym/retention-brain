@@ -1,4 +1,4 @@
-import { Event, type EventKind } from "@rcrb/core";
+import { Event, type EventKind } from "@retention-brain/core";
 
 // Stripe event.type → our EventKind. Renewal invoices map to payment.success
 // rather than subscription.renewal because subscription state didn't change.

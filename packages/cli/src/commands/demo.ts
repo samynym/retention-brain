@@ -1,9 +1,9 @@
 import kleur from "kleur";
-import { syntheticSource } from "@rcrb/sources/synthetic";
-import { buildTimelines, hasLLMKey, type Event } from "@rcrb/core";
-import { scoreAll } from "@rcrb/risk-engine";
-import { generateAll } from "@rcrb/intervention-agent";
-import { evalPredictions } from "@rcrb/eval";
+import { syntheticSource } from "@retention-brain/sources/synthetic";
+import { buildTimelines, hasLLMKey, type Event } from "@retention-brain/core";
+import { scoreAll } from "@retention-brain/risk-engine";
+import { generateAll } from "@retention-brain/intervention-agent";
+import { evalPredictions } from "@retention-brain/eval";
 
 const DAY_MS = 86_400_000;
 const DEMO_THRESHOLD = 0.4;

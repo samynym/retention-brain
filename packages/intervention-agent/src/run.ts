@@ -1,5 +1,5 @@
-import type { Intervention, UserTimeline } from "@rcrb/core";
-import type { RiskScore } from "@rcrb/risk-engine";
+import type { Intervention, UserTimeline } from "@retention-brain/core";
+import type { RiskScore } from "@retention-brain/risk-engine";
 import { decideChannel } from "./decide-channel.js";
 import { decideOffer } from "./decide-offer.js";
 import { decideTiming } from "./decide-timing.js";

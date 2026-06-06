@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { Intervention } from "@rcrb/core";
+import type { Intervention } from "@retention-brain/core";
 import { critique } from "./critic.js";
 
 const HAS_KEY = Boolean(process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY);

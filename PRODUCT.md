@@ -1,8 +1,8 @@
-# rc-retention-brain — Product Spec
+# retention-brain — Product Spec
 
 ## What it is
 
-**An autopilot retention agent for subscription apps.** You point it at your data — RevenueCat, Stripe, your analytics tool, your error tracker, your support inbox — and it tells you, per individual user, who's about to churn, why, and exactly what to send them to save them.
+**An autopilot retention agent for subscription apps.** You point it at your data — your billing platform, your analytics tool, your error tracker, your support inbox (Stripe, RevenueCat, PostHog, Sentry, Intercom, anything with an MCP server) — and it tells you, per individual user, who's about to churn, why, and exactly what to send them to save them.
 
 Not "your churn rate is 4.2% this month." That's a dashboard. This is "user_47 just opened your settings page, hit a payment failure 3 days ago, and hasn't logged in for 8 days. Send this email in the next 24 hours, offer a 14-day extension, and here's the actual copy."
 
@@ -12,7 +12,7 @@ It runs continuously in the background once installed.
 
 **Today**, if you run a subscription app:
 - You open Mixpanel and see usage is dropping
-- You open RC and see who cancelled this week
+- You open your billing dashboard and see who cancelled this week
 - You open Intercom and see angry tickets
 - You open Sentry and see crashes
 - You manually piece this together for *some* users
@@ -28,7 +28,7 @@ It runs continuously in the background once installed.
 
 ## The user
 
-Indie devs and small teams running subscription mobile apps on RevenueCat. They:
+Indie devs and small teams running subscription apps (mobile or web). They:
 - Have ~hundreds to ~tens-of-thousands of paying users
 - Already pay attention to churn but can only handle the loudest cases manually
 - Don't have a dedicated retention/lifecycle team
@@ -60,7 +60,7 @@ TOP 5 — recommended interventions ready to send:
    Send: email · 7-day grace + payment update link · immediate
    ...
 
-To send all: rc-retention-brain run --send
+To send all: retention-brain run --send
 ```
 
 You read the briefings, edit the ones you don't like, run `--send` on the rest. Done.
@@ -90,6 +90,6 @@ Crash-driven users get the engineering-play. Retention-risk users get the user-p
 
 - Not a CRM
 - Not a marketing automation platform
-- Not a paywall designer (RC ships that)
+- Not a paywall designer (your billing platform ships that)
 - Not multi-tenant SaaS — runs locally or self-hosted
 - Not "an AI to do all your growth" — focused on one job (catching at-risk paying users) and doing it well

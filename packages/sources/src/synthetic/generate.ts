@@ -1,5 +1,5 @@
 import seedrandom from "seedrandom";
-import type { Event } from "@rcrb/core";
+import type { Event } from "@retention-brain/core";
 import { personas } from "./personas/index.js";
 import type { Persona } from "./personas/types.js";
 import type { GroundTruthLabel } from "./ground-truth.js";
