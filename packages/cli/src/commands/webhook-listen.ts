@@ -1,10 +1,10 @@
 import "dotenv/config";
 import { resolve } from "node:path";
 import kleur from "kleur";
-import { startWebhookServer } from "@rcrb/webhook-receiver";
+import { startWebhookServer } from "@retention-brain/webhook-receiver";
 
 const DEFAULT_PORT = 4044;
-const DEFAULT_STORE = ".rcrb/events.jsonl";
+const DEFAULT_STORE = ".retention-brain/events.jsonl";
 
 export async function runWebhookListen(opts: { port?: string; store?: string; insecure?: boolean }): Promise<void> {
   const port = opts.port ? Number(opts.port) : DEFAULT_PORT;

@@ -1,4 +1,4 @@
-import type { Source } from "@rcrb/sources";
+import type { Source } from "@retention-brain/sources";
 import { openMCPClient, type MCPTransportConfig } from "./client.js";
 import { normalizeWithConfig, type FieldMapping } from "./normalize-config.js";
 import { normalizeWithLLM } from "./normalize-llm.js";

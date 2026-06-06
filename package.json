@@ -1,5 +1,5 @@
 {
-  "name": "rc-retention-brain",
+  "name": "retention-brain",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -12,8 +12,9 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "lint": "tsc -b",
-    "rcrb": "tsx packages/cli/src/index.ts",
-    "demo": "tsx packages/cli/src/index.ts demo"
+    "retb": "tsx packages/cli/src/index.ts",
+    "demo": "tsx packages/cli/src/index.ts demo",
+    "start": "pnpm --filter @retention-brain/server start"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

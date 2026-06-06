@@ -1,6 +1,6 @@
 import { generateObject } from "ai";
 import { z } from "zod";
-import { Event, EventKind, getModel } from "@rcrb/core";
+import { Event, EventKind, getModel } from "@retention-brain/core";
 import { randomUUID } from "node:crypto";
 
 const NormalizedEvent = z.object({

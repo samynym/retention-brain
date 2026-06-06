@@ -9,7 +9,7 @@ const DAYS = 30;
 const SEED = "inspect-baseline";
 const START = new Date("2026-01-01T00:00:00.000Z");
 
-console.log(`\n=== rc-retention-brain · simulator baseline ===`);
+console.log(`\n=== retention-brain · simulator baseline ===`);
 console.log(`seed=${SEED}  users=${NUM_USERS}  days=${DAYS}\n`);
 
 const src = syntheticSource({

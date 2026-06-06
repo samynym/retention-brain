@@ -10,7 +10,7 @@ import { runEventsMcp } from "./commands/events-mcp.js";
 
 const program = new Command();
 program
-  .name("rc-retention-brain")
+  .name("retention-brain")
   .description("Per-user, cross-source retention agent for subscription apps (MCP-only)")
   .version("0.0.1");
 
@@ -47,16 +47,16 @@ program
 
 program
   .command("webhook-listen")
-  .description("Start an HTTP webhook receiver for RC + Stripe; appends events to .rcrb/events.jsonl")
+  .description("Start an HTTP webhook receiver for Stripe + RevenueCat; appends events to .retention-brain/events.jsonl")
   .option("--port <n>", "HTTP port", "4044")
-  .option("--store <path>", "event log file", ".rcrb/events.jsonl")
+  .option("--store <path>", "event log file", ".retention-brain/events.jsonl")
   .option("--insecure", "accept unsigned webhooks (sandbox testing only — do not use in production)")
   .action(runWebhookListen);
 
 program
   .command("events-mcp-server")
-  .description("Stdio MCP server that exposes captured webhook events as list_events(since, until). Intended to be launched as a child process from .rcrb/mcp.json")
-  .option("--store <path>", "event log file", ".rcrb/events.jsonl")
+  .description("Stdio MCP server that exposes captured webhook events as list_events(since, until). Intended to be launched as a child process from .retention-brain/mcp.json")
+  .option("--store <path>", "event log file", ".retention-brain/events.jsonl")
   .action(runEventsMcp);
 
 await program.parseAsync();

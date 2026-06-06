@@ -1,4 +1,4 @@
-import type { RiskScore } from "@rcrb/risk-engine";
+import type { RiskScore } from "@retention-brain/risk-engine";
 
 export function formatTopSignals(
   risk: RiskScore,

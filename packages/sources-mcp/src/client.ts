@@ -20,7 +20,7 @@ export async function openMCPClient(
   label: string,
   transport: MCPTransportConfig
 ): Promise<MCPClientHandle> {
-  const client = new Client({ name: `rcrb-${label}`, version: "0.0.1" });
+  const client = new Client({ name: `retb-${label}`, version: "0.0.1" });
   if (transport.kind === "stdio") {
     const stdio = new StdioClientTransport({
       command: transport.command,

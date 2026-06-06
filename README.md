@@ -1,11 +1,11 @@
-# rc-retention-brain
+# retention-brain
 
-A per-user retention agent for subscription apps. Reads each user's full timeline across your tools (RevenueCat, Stripe, Sentry, PostHog — any MCP server), scores churn risk per user, and writes a briefing of personalized retention plays — channel, offer, timing, and the email copy itself, drafted to reference what *that* user actually did.
+A per-user retention agent for subscription apps. Reads each user's full timeline across your tools (Stripe, PostHog, Sentry, RevenueCat — any MCP server), scores churn risk per user, and writes a briefing of personalized retention plays — channel, offer, timing, and the email copy itself, drafted to reference what *that* user actually did.
 
-**Operator's analyst, today. Operator, soon.** Existing subscription tooling tells you what happened (Rico, Mixpanel, the RC dashboard) or lets you build flows yourself (Customer.io, Braze). v1.0 of this brain decides what to do per user, drafts the email, and hands it back for you to send. v1.1 graduates to actually sending it, one channel at a time, as the agent earns your trust.
+**Operator's analyst, today. Operator, soon.** Existing subscription tooling tells you what happened (Mixpanel, your billing dashboard, the AI assistant embedded in it) or lets you build flows yourself (Customer.io, Braze). v1.0 of this brain decides what to do per user, drafts the email, and hands it back for you to send. v1.1 graduates to actually sending it, one channel at a time, as the agent earns your trust.
 
 **Two gradients you control:**
-- **Sources:** Start with one key (RevenueCat alone is enough). Add Stripe, Sentry, PostHog, or any MCP server as you want more signal.
+- **Sources:** Start with one key — any MCP-shaped source is enough (Stripe, RevenueCat, PostHog, Sentry, or anything else with an MCP server). Add more as you want richer signal.
 - **Trust:** Start at briefing-only. Promote to approve-each, then per-channel autonomy, then policy-based autonomy. You decide when each step is earned.
 
 See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the mental model behind both gradients. [`PRODUCT.md`](./PRODUCT.md) and [`SPEC.md`](./SPEC.md) are the full design.
@@ -13,14 +13,14 @@ See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the mental model behind both grad
 ## Install in 3 minutes
 
 ```sh
-git clone https://github.com/<you>/rc-retention-brain && cd rc-retention-brain
+git clone https://github.com/<you>/retention-brain && cd retention-brain
 pnpm install
 
-pnpm rcrb init       # interactive setup — writes .env + a sources template
-pnpm rcrb run        # writes briefing-<date>.md
+pnpm retb init       # interactive setup — writes .env + a sources template
+pnpm retb run        # writes briefing-<date>.md
 ```
 
-Edit `.rcrb/mcp.json` to point at your tools (RevenueCat, Stripe, PostHog, Sentry, anything with an MCP server). [`examples/mcp.json`](./examples/mcp.json) is a working template.
+Edit `.retention-brain/mcp.json` to point at your tools (Stripe, PostHog, Sentry, RevenueCat, anything with an MCP server). [`examples/mcp.json`](./examples/mcp.json) is a working template.
 
 ## What's in a briefing
 
@@ -59,7 +59,7 @@ Defaults: Claude Sonnet 4.6 (generator) + Claude Opus 4.7 (critic). For OpenAI i
 
 Every source is an MCP server. There's no vendor-specific code — you point us at the server, name a tool, and either supply a field-path mapping or let an LLM convert the output to events.
 
-`.rcrb/mcp.json`:
+`.retention-brain/mcp.json`:
 
 ```json
 {
@@ -100,26 +100,26 @@ export MCP_BILLING_HINT="Stripe Subscription objects."
 
 `kind` must be one of `subscription.*`, `payment.*`, `usage.*`, `support.*`, `error.*`, `review.submitted`.
 
-## Webhook layer (for RC + Stripe)
+## Webhook layer (for Stripe + RevenueCat)
 
-The official RevenueCat and Stripe MCPs don't expose a "list events between dates" tool — only per-customer queries. To get the `payment_health` signal (which dominates churn prediction) the brain needs a forward-capture mechanism.
+The official Stripe and RevenueCat MCPs don't expose a "list events between dates" tool — only per-customer queries. To get the `payment_health` signal (which dominates churn prediction) the brain needs a forward-capture mechanism.
 
-`rcrb webhook-listen` starts a small HTTP receiver that catches RC + Stripe webhooks and appends them to `.rcrb/events.jsonl` already in the brain's event schema. A second built-in command, `rcrb events-mcp-server`, fronts the same file as a stdio MCP. You wire it into `.rcrb/mcp.json` like any other source.
+`retb webhook-listen` starts a small HTTP receiver that catches Stripe + RevenueCat webhooks and appends them to `.retention-brain/events.jsonl` already in the brain's event schema. A second built-in command, `retb events-mcp-server`, fronts the same file as a stdio MCP. You wire it into `.retention-brain/mcp.json` like any other source.
 
 ```sh
-pnpm rcrb webhook-listen --port 4044
-# point Stripe + RC dashboards at
+pnpm retb webhook-listen --port 4044
+# point your billing dashboards at
 #   https://<your-public-host>/webhooks/stripe
 #   https://<your-public-host>/webhooks/revenuecat
 ```
 
-In `.rcrb/mcp.json`:
+In `.retention-brain/mcp.json`:
 
 ```json
 {
   "label": "webhook-events",
   "command": "pnpm",
-  "args": ["rcrb", "events-mcp-server", "--store", ".rcrb/events.jsonl"],
+  "args": ["retb", "events-mcp-server", "--store", ".retention-brain/events.jsonl"],
   "tool": "list_events",
   "mapper": "config",
   "mapping": {
@@ -137,14 +137,14 @@ Signature verification is wired but only enforced if you set:
 
 ```sh
 export STRIPE_WEBHOOK_SECRET=whsec_...
-export REVENUECAT_WEBHOOK_SECRET=...     # the shared-secret you paste in RC's webhook config
+export REVENUECAT_WEBHOOK_SECRET=...     # the shared-secret you paste in RevenueCat's webhook config
 ```
 
 Without either, the receiver accepts unsigned payloads — handy for sandbox tests, not for production.
 
-### Giving Stripe + RC a public URL
+### Giving Stripe + RevenueCat a public URL
 
-`webhook-listen` binds to a local port — fine for testing on your machine. Stripe and RC need to POST from the public internet, so production setups need a reachable URL pointing at port 4044. Three real options, no code changes:
+`webhook-listen` binds to a local port — fine for testing on your machine. Stripe and RevenueCat need to POST from the public internet, so production setups need a reachable URL pointing at port 4044. Three real options, no code changes:
 
 **1. Tunnel (free, 30 seconds)** — for solo dev, hobby, demos:
 
@@ -157,7 +157,7 @@ cloudflared tunnel --url http://localhost:4044
 ngrok http 4044
 ```
 
-Paste the printed URL + `/webhooks/stripe` into Stripe's webhook config, and `/webhooks/revenuecat` into RC's. Tunnels die when the laptop closes — fine for testing, not for prod.
+Paste the printed URL + `/webhooks/stripe` into Stripe's webhook config, and `/webhooks/revenuecat` into RevenueCat's. Tunnels die when the laptop closes — fine for testing, not for prod.
 
 **2. VPS / PaaS deploy (~$3–5/mo)** — real production:
 
@@ -165,8 +165,8 @@ The receiver is a plain Node server. Drop it on any host:
 
 ```sh
 # fly.io
-fly launch --name your-rcrb-webhooks
-# accept the defaults; fly auto-generates a Dockerfile that runs `pnpm rcrb webhook-listen --port $PORT`
+fly launch --name your-retb-webhooks
+# accept the defaults; fly auto-generates a Dockerfile that runs `pnpm retb webhook-listen --port $PORT`
 fly secrets set STRIPE_WEBHOOK_SECRET=whsec_... REVENUECAT_WEBHOOK_SECRET=...
 fly deploy
 ```

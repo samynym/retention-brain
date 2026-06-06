@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
-import { startLocalEventsMCP } from "@rcrb/webhook-receiver";
+import { startLocalEventsMCP } from "@retention-brain/webhook-receiver";
 
-const DEFAULT_STORE = ".rcrb/events.jsonl";
+const DEFAULT_STORE = ".retention-brain/events.jsonl";
 
 export async function runEventsMcp(opts: { store?: string }): Promise<void> {
   const storePath = resolve(process.cwd(), opts.store ?? DEFAULT_STORE);

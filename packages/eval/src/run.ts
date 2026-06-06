@@ -1,7 +1,7 @@
-import { buildTimelines, type Event } from "@rcrb/core";
-import { syntheticSource } from "@rcrb/sources/synthetic";
-import { scoreAll } from "@rcrb/risk-engine";
-import { generateAll } from "@rcrb/intervention-agent";
+import { buildTimelines, type Event } from "@retention-brain/core";
+import { syntheticSource } from "@retention-brain/sources/synthetic";
+import { scoreAll } from "@retention-brain/risk-engine";
+import { generateAll } from "@retention-brain/intervention-agent";
 import { evalPredictions } from "./prediction.js";
 import { evalInterventions, type InterventionEval } from "./intervention.js";
 import { renderReport } from "./report.js";

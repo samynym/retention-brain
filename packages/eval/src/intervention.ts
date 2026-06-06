@@ -1,5 +1,5 @@
-import { getModelId, type Intervention } from "@rcrb/core";
-import { critique, type Critique } from "@rcrb/intervention-agent";
+import { getModelId, type Intervention } from "@retention-brain/core";
+import { critique, type Critique } from "@retention-brain/intervention-agent";
 
 export type InterventionEval = {
   count: number;

@@ -1,22 +1,22 @@
 {
-  "name": "rc-retention-brain",
+  "name": "retention-brain",
   "version": "0.0.1",
   "type": "module",
   "bin": {
-    "rc-retention-brain": "./src/index.ts"
+    "retention-brain": "./src/index.ts"
   },
   "scripts": {
     "build": "tsc -b"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.4.2",
-    "@rcrb/core": "workspace:*",
-    "@rcrb/eval": "workspace:*",
-    "@rcrb/intervention-agent": "workspace:*",
-    "@rcrb/risk-engine": "workspace:*",
-    "@rcrb/sources": "workspace:*",
-    "@rcrb/sources-mcp": "workspace:*",
-    "@rcrb/webhook-receiver": "workspace:*",
+    "@retention-brain/core": "workspace:*",
+    "@retention-brain/eval": "workspace:*",
+    "@retention-brain/intervention-agent": "workspace:*",
+    "@retention-brain/risk-engine": "workspace:*",
+    "@retention-brain/sources": "workspace:*",
+    "@retention-brain/sources-mcp": "workspace:*",
+    "@retention-brain/webhook-receiver": "workspace:*",
     "commander": "^12.1.0",
     "dotenv": "^16.4.5",
     "kleur": "^4.1.5",

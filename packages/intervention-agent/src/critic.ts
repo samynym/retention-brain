@@ -1,6 +1,6 @@
 import { generateObject } from "ai";
 import { z } from "zod";
-import { getModel, getModelId, type Intervention } from "@rcrb/core";
+import { getModel, getModelId, type Intervention } from "@retention-brain/core";
 
 const CriticSchema = z.object({
   scores: z.object({
