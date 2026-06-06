@@ -33,7 +33,38 @@ type StoredOAuth = {
   auth_server_url: string;
   client_info: OAuthClientInformationFull;
   resource: string; // the MCP url
+  /**
+   * The MCP endpoint to actually call. PostHog is region-split (US vs EU) and a
+   * token minted in one region is rejected by the other's MCP as "Invalid API
+   * key". We probe the token's region at connect time and pin the right host
+   * here; falls back to the connector's default when absent.
+   */
+  mcp_url?: string;
 };
+
+/**
+ * PostHog clouds are region-isolated: a `pha_` token only authenticates against
+ * the region that issued it. OAuth discovery always lands on the US host, so we
+ * probe `/api/users/@me/` per region (cheap, needs only `user:read`) to learn
+ * where the token lives and return that region's MCP endpoint.
+ */
+async function resolvePosthogMcpUrl(accessToken: string, fallback: string): Promise<string> {
+  const regions: { api: string; mcp: string }[] = [
+    { api: "https://us.posthog.com", mcp: "https://mcp.posthog.com/mcp" },
+    { api: "https://eu.posthog.com", mcp: "https://mcp.eu.posthog.com/mcp" },
+  ];
+  for (const r of regions) {
+    try {
+      const res = await fetch(`${r.api}/api/users/@me/`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (res.ok) return r.mcp; // 200 → token belongs to this region
+    } catch {
+      // network blip — try the next region
+    }
+  }
+  return fallback;
+}
 
 /** Begin a connect flow; returns the provider's authorization URL to redirect to. */
 export async function startConnect(
@@ -119,14 +150,18 @@ export async function completeConnect(
     resource: new URL(flow.resource),
   });
 
+  const kind = flow.provider as ConnectorKind;
   const stored: StoredOAuth = {
     tokens,
     obtained_at: Date.now(),
     auth_server_url: flow.auth_server_url,
     client_info: flow.client_info as OAuthClientInformationFull,
     resource: flow.resource,
+    mcp_url:
+      kind === "posthog" && tokens.access_token
+        ? await resolvePosthogMcpUrl(tokens.access_token, CONNECTORS.posthog.mcpUrl)
+        : undefined,
   };
-  const kind = flow.provider as ConnectorKind;
   await saveSource(flow.user_id, kind, CONNECTORS[kind].name, JSON.stringify(stored));
   await admin.from("oauth_flows").delete().eq("state", state);
 
@@ -165,7 +200,7 @@ export async function oauthSource(
     label: kind,
     transport: {
       kind: "http",
-      url: c.mcpUrl,
+      url: stored.mcp_url ?? c.mcpUrl, // region-pinned at connect time (PostHog US/EU)
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     },
     tool: c.tool,
