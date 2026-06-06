@@ -1,4 +1,4 @@
-import type { UserTimeline } from "@rcrb/core";
+import type { UserTimeline } from "@retention-brain/core";
 import {
   usageDecline,
   paymentHealth,

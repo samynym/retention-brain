@@ -38,7 +38,7 @@ const FileSchema = z.object({
 
 export type LoadedMCPSource = MCPSourceConfig;
 
-const DEFAULT_JSON_PATHS = [".rcrb/mcp.json", "rcrb.config.json"];
+const DEFAULT_JSON_PATHS = [".retention-brain/mcp.json", "retention-brain.config.json"];
 
 export function loadMCPSourcesFromFile(
   cwd: string = process.cwd(),

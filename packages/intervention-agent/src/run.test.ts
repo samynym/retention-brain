@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { syntheticSource } from "@rcrb/sources/synthetic";
-import { buildTimelines, type Event } from "@rcrb/core";
-import { scoreAll } from "@rcrb/risk-engine";
+import { syntheticSource } from "@retention-brain/sources/synthetic";
+import { buildTimelines, type Event } from "@retention-brain/core";
+import { scoreAll } from "@retention-brain/risk-engine";
 import { generateAll } from "./run.js";
 
 const HAS_KEY = Boolean(process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY);

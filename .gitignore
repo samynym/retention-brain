@@ -11,8 +11,11 @@ interventions/
 /briefing-*.md
 /temporal-holdout-*.md
 /.staged-future.json
-/.rcrb/
+/.retention-brain/
 /.aide/
 /engineering-tickets/
 /briefing-view.html
 PLAN.md
+.gstack/
+.env.production
+.vercel

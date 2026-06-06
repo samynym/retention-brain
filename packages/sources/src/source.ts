@@ -1,4 +1,4 @@
-import type { Event } from "@rcrb/core";
+import type { Event } from "@retention-brain/core";
 
 export type SourceConfig = Record<string, string | undefined>;
 

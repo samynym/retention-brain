@@ -9,13 +9,13 @@ export type LocalEventsMCPOptions = {
 
 export async function startLocalEventsMCP(opts: LocalEventsMCPOptions): Promise<void> {
   const store = new EventStore(opts.storePath);
-  const server = new McpServer({ name: "rcrb-events", version: "0.0.1" });
+  const server = new McpServer({ name: "retb-events", version: "0.0.1" });
 
   server.registerTool(
     "list_events",
     {
       description:
-        "Return events captured from RC + Stripe webhooks, optionally filtered by ISO-8601 date range.",
+        "Return events captured from Stripe + RevenueCat webhooks, optionally filtered by ISO-8601 date range.",
       inputSchema: {
         since: z.string().optional().describe("ISO-8601 lower bound (inclusive)"),
         until: z.string().optional().describe("ISO-8601 upper bound (inclusive)"),

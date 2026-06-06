@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EventStore } from "./storage.js";
-import type { Event } from "@rcrb/core";
+import type { Event } from "@retention-brain/core";
 
 function makeEvent(timestamp: string, user_id = "u1"): Event {
   return {
@@ -18,7 +18,7 @@ function makeEvent(timestamp: string, user_id = "u1"): Event {
 
 describe("EventStore", () => {
   it("appends and reads back events", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "rcrb-evt-"));
+    const dir = mkdtempSync(join(tmpdir(), "retb-evt-"));
     const store = new EventStore(join(dir, "events.jsonl"));
     await store.append(makeEvent("2026-05-01T00:00:00Z"));
     await store.append(makeEvent("2026-05-05T00:00:00Z"));
@@ -27,7 +27,7 @@ describe("EventStore", () => {
   });
 
   it("filters by since/until", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "rcrb-evt-"));
+    const dir = mkdtempSync(join(tmpdir(), "retb-evt-"));
     const store = new EventStore(join(dir, "events.jsonl"));
     await store.append(makeEvent("2026-04-01T00:00:00Z"));
     await store.append(makeEvent("2026-05-15T00:00:00Z"));
@@ -41,7 +41,7 @@ describe("EventStore", () => {
   });
 
   it("returns [] when file is missing", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "rcrb-evt-"));
+    const dir = mkdtempSync(join(tmpdir(), "retb-evt-"));
     const store = new EventStore(join(dir, "missing.jsonl"));
     expect(await store.readAll()).toEqual([]);
   });

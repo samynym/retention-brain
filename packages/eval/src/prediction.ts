@@ -1,5 +1,5 @@
-import type { GroundTruthLabel } from "@rcrb/sources/synthetic";
-import type { RiskScore } from "@rcrb/risk-engine";
+import type { GroundTruthLabel } from "@retention-brain/sources/synthetic";
+import type { RiskScore } from "@retention-brain/risk-engine";
 
 export type PredictionEval = {
   threshold: number;

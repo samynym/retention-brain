@@ -1,7 +1,7 @@
 import { generateObject } from "ai";
 import { z } from "zod";
-import { getModel } from "@rcrb/core";
-import type { RiskScore } from "@rcrb/risk-engine";
+import { getModel } from "@retention-brain/core";
+import type { RiskScore } from "@retention-brain/risk-engine";
 import { formatTopSignals } from "./prompts.js";
 
 const Schema = z.object({
