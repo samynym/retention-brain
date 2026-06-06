@@ -52,9 +52,12 @@ export const CONNECTORS: Record<ConnectorKind, Connector> = {
     },
     hint: "PostHog HogQL rows. user_id should be properties.app_user_id when present, else distinct_id. timestamp is ISO. Map event='$session_start' to usage.session, '$pageview' or any custom name to usage.feature. Skip $identify/$set rows.",
     // Minimal set for an event HogQL query (vs the ~90 read scopes PostHog
-    // advertises). If execute-sql complains, add the named scope here.
+    // advertises). `user:read` is mandatory: the MCP's own `initialize`
+    // handshake calls GET /api/users/@me/ to resolve the active project, so
+    // without it every tool call 4xxs before our query ever runs.
     scopes: [
       "query:read",
+      "user:read",
       "insight:read",
       "event_definition:read",
       "person:read",
