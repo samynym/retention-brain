@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
+.env.*
+!.env.example
 .env.local
 .DS_Store
 *.log
@@ -11,7 +13,11 @@ interventions/
 /briefing-*.md
 /temporal-holdout-*.md
 /.staged-future.json
+/.rcrb/
 /.retention-brain/
+/.gstack/
+/.vercel/
+/output/
 /.aide/
 /engineering-tickets/
 /briefing-view.html
