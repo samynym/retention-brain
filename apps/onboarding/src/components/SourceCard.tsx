@@ -2,10 +2,17 @@ import { type CSSProperties, useState } from "react";
 import type { SourceConn } from "../state/machine";
 import type { SourceDef } from "../fixtures/sources";
 
-// Secondary action sitting next to connected status (change key / reconnect OAuth).
-// Bordered + raised so it reads as a real button; plain text disappeared.
-const SECONDARY_BTN =
-  "rounded-md border px-2 py-1 font-mono text-[10px] tracking-[0.06em] uppercase transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]";
+// Action buttons share one boxed shape so primary and secondary read as siblings.
+// Primary (Connect) = accent border/text; secondary (change / reconnect) = grey.
+const BTN_BASE =
+  "rounded-md border px-2.5 py-1 font-mono text-[11px] tracking-[0.06em] uppercase transition-colors";
+const PRIMARY_BTN = `${BTN_BASE} hover:bg-[var(--color-accent-wash)]`;
+const PRIMARY_BTN_STYLE: CSSProperties = {
+  borderColor: "var(--color-accent)",
+  color: "var(--color-accent)",
+  backgroundColor: "transparent",
+};
+const SECONDARY_BTN = `${BTN_BASE} hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]`;
 const SECONDARY_BTN_STYLE: CSSProperties = {
   borderColor: "var(--color-line-strong)",
   backgroundColor: "var(--color-raised)",
@@ -168,8 +175,8 @@ export function SourceCard({
           <button
             type="button"
             onClick={activate}
-            className="font-mono text-[11px] tracking-[0.06em] uppercase transition-colors"
-            style={{ color: "var(--color-accent)" }}
+            className={PRIMARY_BTN}
+            style={PRIMARY_BTN_STYLE}
           >
             {idleLabel(source, open)}
           </button>
