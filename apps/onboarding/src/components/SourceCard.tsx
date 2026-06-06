@@ -1,9 +1,19 @@
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
 import type { SourceConn } from "../state/machine";
 import type { SourceDef } from "../fixtures/sources";
 
+// Secondary action sitting next to connected status (change key / reconnect OAuth).
+// Bordered + raised so it reads as a real button; plain text disappeared.
+const SECONDARY_BTN =
+  "rounded-md border px-2 py-1 font-mono text-[10px] tracking-[0.06em] uppercase transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]";
+const SECONDARY_BTN_STYLE: CSSProperties = {
+  borderColor: "var(--color-line-strong)",
+  backgroundColor: "var(--color-raised)",
+  color: "var(--color-ink-soft)",
+};
+
 /**
- * A connectable source. Connect simulates an OAuth / MCP round-trip; pure mock.
+ * A connectable source. Connect handles key entry or provider OAuth.
  *
  * Single-provider OAuth sources (Sentry) connect on click. Key-based sources
  * (RevenueCat, Stripe) open a small form for the read-only key.
@@ -130,8 +140,8 @@ export function SourceCard({
                   setEditingKey(true);
                   setKeyError("");
                 }}
-                className="font-mono text-[10px] tracking-[0.06em] uppercase transition-colors"
-                style={{ color: "var(--color-ink-faint)" }}
+                className={SECONDARY_BTN}
+                style={SECONDARY_BTN_STYLE}
               >
                 change
               </button>
@@ -140,8 +150,8 @@ export function SourceCard({
               <button
                 type="button"
                 onClick={() => onConnectOAuth(source.oauthProvider!)}
-                className="font-mono text-[10px] tracking-[0.06em] uppercase transition-colors"
-                style={{ color: "var(--color-ink-faint)" }}
+                className={SECONDARY_BTN}
+                style={SECONDARY_BTN_STYLE}
               >
                 reconnect
               </button>
