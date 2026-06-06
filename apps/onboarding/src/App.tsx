@@ -37,6 +37,11 @@ const DEMO = import.meta.env.VITE_DEMO === "1";
 const DEMO_IDENTITY = { email: "you@yourcompany.com", provider: "demo" };
 const ANALYZE_MS = 1500;
 
+// The dev toolbar (scenario switch / operator / reset) is a build-time affordance,
+// not product UI — show it only in local dev or the shareable demo build, never
+// in the real production build.
+const SHOW_DEV_TOOLBAR = import.meta.env.DEV || DEMO;
+
 function errMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -259,14 +264,16 @@ export function App() {
         <Shell identity={state.identity} onSignOut={handleSignOut}>
           <OperatorView onBack={() => dispatch({ type: "SET_VIEW", view: "app" })} />
         </Shell>
-        <DevToolbar
-          phase={state.phase}
-          scenario={state.scenario}
-          view={state.view}
-          onScenario={(scenario) => dispatch({ type: "SET_SCENARIO", scenario })}
-          onView={(view) => dispatch({ type: "SET_VIEW", view })}
-          onReset={handleReset}
-        />
+        {SHOW_DEV_TOOLBAR && (
+          <DevToolbar
+            phase={state.phase}
+            scenario={state.scenario}
+            view={state.view}
+            onScenario={(scenario) => dispatch({ type: "SET_SCENARIO", scenario })}
+            onView={(view) => dispatch({ type: "SET_VIEW", view })}
+            onReset={handleReset}
+          />
+        )}
       </>
     );
   }
@@ -319,14 +326,16 @@ export function App() {
         </Shell>
       )}
 
-      <DevToolbar
-        phase={state.phase}
-        scenario={state.scenario}
-        view={state.view}
-        onScenario={(scenario) => dispatch({ type: "SET_SCENARIO", scenario })}
-        onView={(view) => dispatch({ type: "SET_VIEW", view })}
-        onReset={handleReset}
-      />
+      {SHOW_DEV_TOOLBAR && (
+        <DevToolbar
+          phase={state.phase}
+          scenario={state.scenario}
+          view={state.view}
+          onScenario={(scenario) => dispatch({ type: "SET_SCENARIO", scenario })}
+          onView={(view) => dispatch({ type: "SET_VIEW", view })}
+          onReset={handleReset}
+        />
+      )}
     </>
   );
 }
