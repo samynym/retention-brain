@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { RiskScore } from "@rcrb/risk-engine";
+import type { RiskScore } from "@retention-brain/risk-engine";
 import { decideOffer } from "./decide-offer.js";
 
 const HAS_KEY = Boolean(process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY);

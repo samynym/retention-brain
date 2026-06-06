@@ -1,5 +1,5 @@
-import type { Event, Intervention, UserTimeline } from "@rcrb/core";
-import type { RiskScore } from "@rcrb/risk-engine";
+import type { Event, Intervention, UserTimeline } from "@retention-brain/core";
+import type { RiskScore } from "@retention-brain/risk-engine";
 
 /** Lightweight reference to a written engineering-tickets/<file>.md. */
 export type EngineeringTicketRef = {

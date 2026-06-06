@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { syntheticSource } from "@rcrb/sources/synthetic";
-import { buildTimelines, type Event } from "@rcrb/core";
-import { scoreAll, EVAL_SEEDS } from "@rcrb/risk-engine";
+import { syntheticSource } from "@retention-brain/sources/synthetic";
+import { buildTimelines, type Event } from "@retention-brain/core";
+import { scoreAll, EVAL_SEEDS } from "@retention-brain/risk-engine";
 import { evalPredictions } from "./prediction.js";
 
 // Pre-registered thresholds: bars are derived from observed numbers on the

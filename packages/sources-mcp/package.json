@@ -1,5 +1,5 @@
 {
-  "name": "@rcrb/sources-mcp",
+  "name": "@retention-brain/sources-mcp",
   "version": "0.0.1",
   "type": "module",
   "main": "./src/index.ts",
@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@rcrb/core": "workspace:*",
-    "@rcrb/sources": "workspace:*",
+    "@retention-brain/core": "workspace:*",
+    "@retention-brain/sources": "workspace:*",
     "ai": "^5.0.0",
     "zod": "^3.23.0"
   }

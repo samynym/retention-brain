@@ -1,4 +1,4 @@
-import { Event, EventKind } from "@rcrb/core";
+import { Event, EventKind } from "@retention-brain/core";
 import { randomUUID } from "node:crypto";
 
 export type FieldMapping = {

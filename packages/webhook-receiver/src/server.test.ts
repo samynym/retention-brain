@@ -66,7 +66,7 @@ describe("verifyStripeSignature", () => {
 
 describe("webhook server e2e", () => {
   it("stores a Stripe webhook event in insecure sandbox mode", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "rcrb-srv-"));
+    const dir = mkdtempSync(join(tmpdir(), "retb-srv-"));
     const storePath = join(dir, "events.jsonl");
     const handle = await startWebhookServer({ port: 0, storePath, allowInsecure: true });
     try {
@@ -90,7 +90,7 @@ describe("webhook server e2e", () => {
   });
 
   it("returns 503 when STRIPE_WEBHOOK_SECRET is unset and allowInsecure is false", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "rcrb-srv-"));
+    const dir = mkdtempSync(join(tmpdir(), "retb-srv-"));
     const storePath = join(dir, "events.jsonl");
     const handle = await startWebhookServer({ port: 0, storePath });
     try {
@@ -108,7 +108,7 @@ describe("webhook server e2e", () => {
   });
 
   it("stores a RevenueCat webhook event", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "rcrb-srv-"));
+    const dir = mkdtempSync(join(tmpdir(), "retb-srv-"));
     const storePath = join(dir, "events.jsonl");
     const handle = await startWebhookServer({ port: 0, storePath, allowInsecure: true });
     try {
@@ -131,7 +131,7 @@ describe("webhook server e2e", () => {
   });
 
   it("rejects a Stripe webhook when the signature is wrong", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "rcrb-srv-"));
+    const dir = mkdtempSync(join(tmpdir(), "retb-srv-"));
     const storePath = join(dir, "events.jsonl");
     const handle = await startWebhookServer({
       port: 0,

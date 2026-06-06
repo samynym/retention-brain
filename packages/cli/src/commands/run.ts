@@ -2,9 +2,9 @@ import "dotenv/config";
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import kleur from "kleur";
-import { buildTimelines, hasLLMKey, type Event, type Intervention } from "@rcrb/core";
-import { scoreAll } from "@rcrb/risk-engine";
-import { generateAll } from "@rcrb/intervention-agent";
+import { buildTimelines, hasLLMKey, type Event, type Intervention } from "@retention-brain/core";
+import { scoreAll } from "@retention-brain/risk-engine";
+import { generateAll } from "@retention-brain/intervention-agent";
 import { loadSourcesFromEnv, NoSubscriptionSourceError } from "../source-config.js";
 import { renderBriefing } from "../briefing.js";
 

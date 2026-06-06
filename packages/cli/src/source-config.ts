@@ -1,5 +1,5 @@
-import type { Source } from "@rcrb/sources";
-import { loadMCPSources, mcpSource, type LoadedMCPSource } from "@rcrb/sources-mcp";
+import type { Source } from "@retention-brain/sources";
+import { loadMCPSources, mcpSource, type LoadedMCPSource } from "@retention-brain/sources-mcp";
 
 export type EnabledSources = {
   mcp: string[];
@@ -13,7 +13,7 @@ export type SourceBundle = {
 export class NoSubscriptionSourceError extends Error {
   constructor() {
     super(
-      "no MCP source configured — add one to .rcrb/mcp.json or set MCP_SOURCES + MCP_<LABEL>_* env vars"
+      "no MCP source configured — add one to .retention-brain/mcp.json or set MCP_SOURCES + MCP_<LABEL>_* env vars"
     );
     this.name = "NoSubscriptionSourceError";
   }

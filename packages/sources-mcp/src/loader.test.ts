@@ -75,15 +75,15 @@ describe("loadMCPSourcesFromEnv", () => {
 
 describe("loadMCPSourcesFromFile", () => {
   it("returns [] when no file exists", () => {
-    const cwd = mkdtempSync(join(tmpdir(), "rcrb-mcp-"));
+    const cwd = mkdtempSync(join(tmpdir(), "retb-mcp-"));
     expect(loadMCPSourcesFromFile(cwd)).toEqual([]);
   });
 
-  it("reads .rcrb/mcp.json", () => {
-    const cwd = mkdtempSync(join(tmpdir(), "rcrb-mcp-"));
-    mkdirSync(join(cwd, ".rcrb"));
+  it("reads .retention-brain/mcp.json", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "retb-mcp-"));
+    mkdirSync(join(cwd, ".retention-brain"));
     writeFileSync(
-      join(cwd, ".rcrb/mcp.json"),
+      join(cwd, ".retention-brain/mcp.json"),
       JSON.stringify({
         sources: [
           {
@@ -104,10 +104,10 @@ describe("loadMCPSourcesFromFile", () => {
     expect(entry?.hint).toBe("support tickets");
   });
 
-  it("reads rcrb.config.json as fallback", () => {
-    const cwd = mkdtempSync(join(tmpdir(), "rcrb-mcp-"));
+  it("reads retention-brain.config.json as fallback", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "retb-mcp-"));
     writeFileSync(
-      join(cwd, "rcrb.config.json"),
+      join(cwd, "retention-brain.config.json"),
       JSON.stringify({
         sources: [{ label: "x", url: "https://x.com", tool: "fetch" }],
       })
@@ -118,9 +118,9 @@ describe("loadMCPSourcesFromFile", () => {
   });
 
   it("substitutes ${VAR} from env into string values", () => {
-    const cwd = mkdtempSync(join(tmpdir(), "rcrb-mcp-"));
+    const cwd = mkdtempSync(join(tmpdir(), "retb-mcp-"));
     writeFileSync(
-      join(cwd, "rcrb.config.json"),
+      join(cwd, "retention-brain.config.json"),
       JSON.stringify({
         sources: [
           {
@@ -141,9 +141,9 @@ describe("loadMCPSourcesFromFile", () => {
   });
 
   it("throws when ${VAR} references an undefined env var", () => {
-    const cwd = mkdtempSync(join(tmpdir(), "rcrb-mcp-"));
+    const cwd = mkdtempSync(join(tmpdir(), "retb-mcp-"));
     writeFileSync(
-      join(cwd, "rcrb.config.json"),
+      join(cwd, "retention-brain.config.json"),
       JSON.stringify({
         sources: [
           {
@@ -159,8 +159,8 @@ describe("loadMCPSourcesFromFile", () => {
   });
 
   it("throws on invalid schema", () => {
-    const cwd = mkdtempSync(join(tmpdir(), "rcrb-mcp-"));
-    writeFileSync(join(cwd, "rcrb.config.json"), JSON.stringify({ sources: [{ label: "x" }] }));
+    const cwd = mkdtempSync(join(tmpdir(), "retb-mcp-"));
+    writeFileSync(join(cwd, "retention-brain.config.json"), JSON.stringify({ sources: [{ label: "x" }] }));
     expect(() => loadMCPSourcesFromFile(cwd)).toThrow();
   });
 });

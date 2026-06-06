@@ -8,14 +8,14 @@
 import "dotenv/config";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { syntheticSource } from "@rcrb/sources/synthetic";
-import { buildTimelines, type Event, type Intervention } from "@rcrb/core";
-import { scoreAll } from "@rcrb/risk-engine";
+import { syntheticSource } from "@retention-brain/sources/synthetic";
+import { buildTimelines, type Event, type Intervention } from "@retention-brain/core";
+import { scoreAll } from "@retention-brain/risk-engine";
 import {
   generateAll,
   generateEngineeringTicket,
   type EngineeringTicket,
-} from "@rcrb/intervention-agent";
+} from "@retention-brain/intervention-agent";
 import type { EngineeringTicketRef } from "../briefing.js";
 import { renderBriefing } from "../briefing.js";
 

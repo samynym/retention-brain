@@ -1,4 +1,4 @@
-import type { UserTimeline } from "@rcrb/core";
+import type { UserTimeline } from "@retention-brain/core";
 import type { Signal } from "./types.js";
 
 const DAY_MS = 86_400_000;

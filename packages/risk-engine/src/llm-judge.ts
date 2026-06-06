@@ -1,4 +1,4 @@
-import { getModel, type UserTimeline } from "@rcrb/core";
+import { getModel, type UserTimeline } from "@retention-brain/core";
 import { generateObject } from "ai";
 import { z } from "zod";
 

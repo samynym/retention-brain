@@ -1,5 +1,5 @@
 import kleur from "kleur";
-import { runFullEval } from "@rcrb/eval";
+import { runFullEval } from "@retention-brain/eval";
 
 function parsePositiveInt(value: string, name: string): number {
   const n = Number(value);

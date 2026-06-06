@@ -1,5 +1,5 @@
 {
-  "name": "@rcrb/eval",
+  "name": "@retention-brain/eval",
   "version": "0.0.1",
   "type": "module",
   "main": "./src/index.ts",
@@ -11,9 +11,9 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@rcrb/core": "workspace:*",
-    "@rcrb/sources": "workspace:*",
-    "@rcrb/risk-engine": "workspace:*",
-    "@rcrb/intervention-agent": "workspace:*"
+    "@retention-brain/core": "workspace:*",
+    "@retention-brain/sources": "workspace:*",
+    "@retention-brain/risk-engine": "workspace:*",
+    "@retention-brain/intervention-agent": "workspace:*"
   }
 }

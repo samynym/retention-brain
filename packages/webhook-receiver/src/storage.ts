@@ -1,7 +1,7 @@
 import { appendFile, mkdir, readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname } from "node:path";
-import { Event } from "@rcrb/core";
+import { Event } from "@retention-brain/core";
 
 export class EventStore {
   constructor(private readonly path: string) {}

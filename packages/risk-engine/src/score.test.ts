@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { syntheticSource } from "@rcrb/sources/synthetic";
-import { buildTimelines, type Event } from "@rcrb/core";
+import { syntheticSource } from "@retention-brain/sources/synthetic";
+import { buildTimelines, type Event } from "@retention-brain/core";
 import { scoreAll, EVAL_SEEDS } from "./index.js";
 
 // Held-out seed (eval-fixed-2). Bars are pre-registered at fixed thresholds —

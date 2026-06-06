@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import type { UserTimeline, Event } from "@rcrb/core";
-import type { RiskScore } from "@rcrb/risk-engine";
+import type { UserTimeline, Event } from "@retention-brain/core";
+import type { RiskScore } from "@retention-brain/risk-engine";
 import {
   generateEngineeringTicket,
   needsEngineeringPlay,

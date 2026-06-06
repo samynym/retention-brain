@@ -1,7 +1,7 @@
 import { generateObject } from "ai";
 import { z } from "zod";
-import { getModel, type Channel } from "@rcrb/core";
-import type { RiskScore } from "@rcrb/risk-engine";
+import { getModel, type Channel } from "@retention-brain/core";
+import type { RiskScore } from "@retention-brain/risk-engine";
 import type { OfferDecision } from "./decide-offer.js";
 import { formatTopSignals } from "./prompts.js";
 

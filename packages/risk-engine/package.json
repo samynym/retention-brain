@@ -1,5 +1,5 @@
 {
-  "name": "@rcrb/risk-engine",
+  "name": "@retention-brain/risk-engine",
   "version": "0.0.1",
   "type": "module",
   "main": "./src/index.ts",
@@ -11,11 +11,11 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@rcrb/core": "workspace:*",
+    "@retention-brain/core": "workspace:*",
     "ai": "^5.0.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
-    "@rcrb/sources": "workspace:*"
+    "@retention-brain/sources": "workspace:*"
   }
 }

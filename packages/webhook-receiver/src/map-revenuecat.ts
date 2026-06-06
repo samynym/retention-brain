@@ -1,4 +1,4 @@
-import { Event, type EventKind } from "@rcrb/core";
+import { Event, type EventKind } from "@retention-brain/core";
 
 const KIND_MAP: Record<string, EventKind> = {
   INITIAL_PURCHASE: "subscription.purchase",

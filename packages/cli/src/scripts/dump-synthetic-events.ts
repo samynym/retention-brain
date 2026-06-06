@@ -5,8 +5,8 @@
 // are exactly the events the briefing sample was produced from.
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { syntheticSource } from "@rcrb/sources/synthetic";
-import type { Event } from "@rcrb/core";
+import { syntheticSource } from "@retention-brain/sources/synthetic";
+import type { Event } from "@retention-brain/core";
 
 const DAY_MS = 86_400_000;
 const DAYS = 30;
