@@ -6,10 +6,9 @@ export type AuthUser = { id: string; email: string; allowlisted: boolean };
 export type Env = { Variables: { user: AuthUser } };
 
 /**
- * Verifies the bearer token against Supabase Auth and attaches the user (with
- * an allowlist flag) to the context. 401 if there's no valid session. Does NOT
- * reject non-allowlisted users — that's `guardAllowlisted`, so `/api/me` can
- * tell a signed-in-but-not-invited dev they're not on the list.
+ * Verifies the bearer token against Supabase Auth and attaches the user to the
+ * context. 401 if there's no valid session. Registration is open, so every
+ * valid Supabase user can use the hosted app.
  */
 export async function authMiddleware(c: Context<Env>, next: Next) {
   // The OAuth callback is hit by the provider's browser redirect (no bearer
@@ -26,21 +25,11 @@ export async function authMiddleware(c: Context<Env>, next: Next) {
   }
   const email = data.user.email.toLowerCase();
 
-  const { data: allow } = await admin
-    .from("allowlist")
-    .select("email")
-    .eq("email", email)
-    .maybeSingle();
-
-  c.set("user", { id: data.user.id, email, allowlisted: allow !== null });
+  c.set("user", { id: data.user.id, email, allowlisted: true });
   await next();
 }
 
-/** Rejects signed-in users who aren't on the beta allowlist. */
+/** Historical gate kept for route compatibility; registration is now open. */
 export async function guardAllowlisted(c: Context<Env>, next: Next) {
-  const user = c.get("user");
-  if (!user?.allowlisted) {
-    return c.json({ error: "This email isn't on the beta allowlist yet." }, 403);
-  }
   await next();
 }

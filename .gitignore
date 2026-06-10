@@ -17,6 +17,7 @@ interventions/
 /.retention-brain/
 /.gstack/
 /.vercel/
+/supabase/.temp/
 /output/
 /.aide/
 /engineering-tickets/

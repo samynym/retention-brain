@@ -49,12 +49,12 @@ async function call(path: string, token: string, method = "GET") {
 }
 
 async function main() {
-  console.log("=== allowlisted owner ===");
+  console.log("=== owner ===");
   const ownerToken = await sessionFor("owner@example.com");
   console.log("/api/me      ", await call("/api/me", ownerToken));
   console.log("/api/analyze ", await call("/api/analyze", ownerToken, "POST"));
 
-  console.log("\n=== non-allowlisted user ===");
+  console.log("\n=== new user ===");
   const strangerToken = await sessionFor("stranger@example.com");
   console.log("/api/me      ", await call("/api/me", strangerToken));
   console.log("/api/analyze ", await call("/api/analyze", strangerToken, "POST"));

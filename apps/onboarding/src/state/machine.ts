@@ -13,7 +13,7 @@ import type { Briefing } from "../types/briefing";
 export type Phase =
   | "checking" // verifying the Supabase session on load
   | "signin"
-  | "not_allowed" // signed in but not on the beta allowlist
+  | "not_allowed" // legacy gate; open registration no longer routes here
   | "connect"
   | "analyzing"
   | "briefing";
@@ -58,8 +58,8 @@ export type State = {
 };
 
 export type Action =
-  | { type: "SESSION_OK"; identity: Identity } // signed in + allowlisted
-  | { type: "SESSION_DENIED"; email: string } // signed in, not allowlisted
+  | { type: "SESSION_OK"; identity: Identity }
+  | { type: "SESSION_DENIED"; email: string } // legacy restricted session
   | { type: "SESSION_NONE" } // no session — show sign-in
   | { type: "SIGN_OUT" }
   | { type: "CONNECT_START"; id: string; provider?: string }

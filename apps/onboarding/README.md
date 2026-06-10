@@ -17,11 +17,8 @@ pnpm --filter @retention-brain/onboarding dev   # http://localhost:5180
 
 One in-memory state machine (`src/state/machine.ts`) drives these screens:
 
-0. **Sign in** — mock OAuth gate (Google / GitHub), framed invite-only +
-   allowlist. OAuth *is* the auth; there's no separate register/password. The
-   beta runs on **our** model key, so this allowlist is the real-world guard
-   against anonymous traffic running up the bill. (BYO-key was explored and
-   removed for now — frictionless first.)
+0. **Sign in** — Supabase magic-link auth. New emails create an account on
+   first sign-in, so anyone can register and try the hosted tool.
 1. **Connect** — at least one billing source ( **one or several** : RevenueCat /
    Stripe / any MCP — shown with a live "Connect at least 1" tracker; you can
    connect both RC and Stripe) plus optional signals. Multi-provider slots

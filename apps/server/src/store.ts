@@ -3,6 +3,32 @@ import { admin } from "./supabase.js";
 import type { Briefing } from "./types.js";
 
 export type SourceKind = "stripe" | "sentry" | "posthog" | "revenuecat";
+export type AnalyticsEventName =
+  | "sign_in_link_requested"
+  | "sign_in_link_sent"
+  | "sign_in_link_error"
+  | "session_started"
+  | "source_connect_started"
+  | "source_connect_completed"
+  | "source_connect_failed"
+  | "analyze_started"
+  | "analyze_failed"
+  | "briefing_cached_shown"
+  | "briefing_ready";
+
+export const ANALYTICS_EVENTS = new Set<AnalyticsEventName>([
+  "sign_in_link_requested",
+  "sign_in_link_sent",
+  "sign_in_link_error",
+  "session_started",
+  "source_connect_started",
+  "source_connect_completed",
+  "source_connect_failed",
+  "analyze_started",
+  "analyze_failed",
+  "briefing_cached_shown",
+  "briefing_ready",
+]);
 
 /** Store (encrypted) a connected source credential for a user. */
 export async function saveSource(
@@ -74,4 +100,17 @@ export async function getLatestBriefing(userId: string): Promise<Briefing | null
     .maybeSingle();
   if (error) throw new Error(`Failed to load briefing: ${error.message}`);
   return (data?.data as Briefing | undefined) ?? null;
+}
+
+export async function recordAnalyticsEvent(
+  eventName: AnalyticsEventName,
+  userId: string | null,
+  properties: Record<string, unknown>,
+): Promise<void> {
+  const { error } = await admin.from("analytics_events").insert({
+    event_name: eventName,
+    user_id: userId,
+    properties,
+  });
+  if (error) throw new Error(`Failed to record analytics event: ${error.message}`);
 }

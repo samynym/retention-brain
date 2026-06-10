@@ -8,6 +8,7 @@ import { DevToolbar } from "./components/DevToolbar";
 import { NotAllowedScreen } from "./components/NotAllowedScreen";
 import { OperatorView } from "./components/OperatorView";
 import { SignInScreen } from "./components/SignInScreen";
+import { track } from "./lib/analytics";
 import {
   connectKeySource,
   getLatest,
@@ -30,7 +31,7 @@ const POLL_MS = 2500;
 const POLL_TIMEOUT_MS = 300_000;
 
 // Demo mode (VITE_DEMO=1): a fully self-contained, shareable build with no
-// sign-in gate and no backend. Skips the magic-link/allowlist auth and mocks
+// sign-in gate and no backend. Skips the magic-link auth and mocks
 // every connect + analyze so anyone with the link can click straight through
 // to the briefing. The real (env-unset) build is unchanged.
 const DEMO = import.meta.env.VITE_DEMO === "1";
@@ -64,7 +65,7 @@ export function App() {
     }
   }
 
-  // Resolve the Supabase session → signed-in (allowlisted), denied, or none.
+  // Resolve the Supabase session → signed-in or none.
   // Demo mode skips auth entirely and drops the visitor straight into Connect.
   useEffect(() => {
     if (DEMO) {
@@ -82,6 +83,7 @@ export function App() {
         const me = await getMe();
         if (!mounted) return;
         if (me.allowlisted) {
+          void track("session_started");
           dispatch({ type: "SESSION_OK", identity: { email: me.email, provider: "email" } });
         } else {
           dispatch({ type: "SESSION_DENIED", email: me.email });
@@ -170,6 +172,7 @@ export function App() {
 
   // Real source connect (Sentry, PostHog) — redirect to the provider's OAuth.
   async function handleConnectOAuth(provider: string) {
+    void track("source_connect_started", { provider, mode: "oauth" });
     if (DEMO) {
       // No OAuth round-trip in demo — mock-connect the matching slot.
       const src = ALL_SOURCES.find((s) => s.oauthProvider === provider);
@@ -180,6 +183,7 @@ export function App() {
       const url = await startOAuth(provider);
       window.location.href = url;
     } catch (err) {
+      void track("source_connect_failed", { provider, mode: "oauth", message: errMessage(err) });
       // eslint-disable-next-line no-alert
       window.alert(`Couldn't start ${provider} connect: ${errMessage(err)}`);
     }
@@ -191,6 +195,7 @@ export function App() {
     secret: string,
   ): Promise<{ ok: boolean; error?: string }> {
     if (id !== "stripe" && id !== "revenuecat") return { ok: false, error: "Unsupported source." };
+    void track("source_connect_started", { provider: id, mode: "key" });
     if (DEMO) {
       // No backend validation in demo — accept the key and mock-connect.
       handleConnect(id, id === "stripe" ? "Stripe" : "RevenueCat");
@@ -199,9 +204,12 @@ export function App() {
     try {
       const { label } = await connectKeySource(id, secret);
       dispatch({ type: "CONNECT_DONE", id, provider: label });
+      void track("source_connect_completed", { provider: id, mode: "key" });
       return { ok: true };
     } catch (err) {
-      return { ok: false, error: errMessage(err) };
+      const message = errMessage(err);
+      void track("source_connect_failed", { provider: id, mode: "key", message });
+      return { ok: false, error: message };
     }
   }
 
@@ -210,6 +218,7 @@ export function App() {
   async function handleAnalyze() {
     stopPolling();
     dispatch({ type: "ANALYZE" });
+    void track("analyze_started", { connected: connectedCount(state) });
     if (DEMO) {
       // No backend run — hold the loader briefly, then show the fixtures.
       const t = setTimeout(() => dispatch({ type: "ANALYSIS_DEMO" }), ANALYZE_MS);
@@ -219,7 +228,9 @@ export function App() {
     try {
       await startAnalyze({ cheap: true });
     } catch (err) {
-      dispatch({ type: "ANALYSIS_ERROR", message: errMessage(err) });
+      const message = errMessage(err);
+      void track("analyze_failed", { message });
+      dispatch({ type: "ANALYSIS_ERROR", message });
       return;
     }
 
@@ -229,21 +240,31 @@ export function App() {
       try {
         res = await getLatest();
       } catch (err) {
-        dispatch({ type: "ANALYSIS_ERROR", message: errMessage(err) });
+        const message = errMessage(err);
+        void track("analyze_failed", { message });
+        dispatch({ type: "ANALYSIS_ERROR", message });
         return;
       }
       const { briefing, run } = res;
       if (run.state === "error") {
-        dispatch({ type: "ANALYSIS_ERROR", message: run.error ?? "Analysis failed." });
+        const message = run.error ?? "Analysis failed.";
+        void track("analyze_failed", { message });
+        dispatch({ type: "ANALYSIS_ERROR", message });
         return;
       }
       if (run.state === "done" && briefing) {
+        void track("briefing_ready");
         dispatch({ type: "ANALYSIS_DONE", briefing });
         return;
       }
-      if (briefing) dispatch({ type: "ANALYSIS_SHOW_CACHED", briefing });
+      if (briefing) {
+        void track("briefing_cached_shown");
+        dispatch({ type: "ANALYSIS_SHOW_CACHED", briefing });
+      }
       if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
-        dispatch({ type: "ANALYSIS_ERROR", message: "The analysis took too long." });
+        const message = "The analysis took too long.";
+        void track("analyze_failed", { message });
+        dispatch({ type: "ANALYSIS_ERROR", message });
         return;
       }
       pollTimer.current = setTimeout(poll, POLL_MS);

@@ -12,13 +12,17 @@ import { fixtureSource } from "./sources/fixture.js";
 import { revenueCatFirstProject, revenueCatSource } from "./sources/revenuecat.js";
 import { stripeSource } from "./sources/stripe.js";
 import type { EventSource } from "./sources/types.js";
+import { admin } from "./supabase.js";
 import {
+  ANALYTICS_EVENTS,
   deleteSource,
   getLatestBriefing,
   getSourceSecret,
   listSources,
+  recordAnalyticsEvent,
   saveBriefing,
   saveSource,
+  type AnalyticsEventName,
   type SourceKind,
 } from "./store.js";
 
@@ -32,7 +36,7 @@ function oauthRedirect(c: { req: { header(name: string): string | undefined } })
 }
 
 /**
- * Hosted backend. Auth-gated (Supabase magic-link + allowlist), per-user runs,
+ * Hosted backend. Auth-gated (Supabase magic-link), per-user runs,
  * briefings persisted to Postgres. Analysis is async: `POST /api/analyze`
  * starts a background run scoped to the signed-in user; clients poll
  * `GET /api/briefing/latest` for the cached/fresh result. Source is still the
@@ -87,12 +91,49 @@ const app = new Hono<Env>();
 
 app.get("/healthz", (c) => c.json({ ok: true }));
 
-// Everything under /api requires a valid session.
 app.use("/api/*", cors());
+
+// Public analytics intake. If a valid bearer token is present, attach the event
+// to that user; pre-auth funnel events are stored without a user id.
+app.post("/api/analytics", async (c) => {
+  const body = await c.req.json().catch(() => ({}) as Record<string, unknown>);
+  const eventName = typeof body.event === "string" ? body.event : "";
+  if (!ANALYTICS_EVENTS.has(eventName as AnalyticsEventName)) {
+    return c.json({ error: "Unknown analytics event." }, 400);
+  }
+  const event = eventName as AnalyticsEventName;
+
+  const rawProperties =
+    body.properties && typeof body.properties === "object" && !Array.isArray(body.properties)
+      ? (body.properties as Record<string, unknown>)
+      : {};
+  const properties = Object.fromEntries(
+    Object.entries(rawProperties).filter(([, value]) => {
+      const t = typeof value;
+      return value === null || t === "string" || t === "number" || t === "boolean";
+    }),
+  );
+
+  let userId: string | null = null;
+  const header = c.req.header("Authorization") ?? "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+  if (token) {
+    const { data } = await admin.auth.getUser(token);
+    userId = data.user?.id ?? null;
+  }
+
+  try {
+    await recordAnalyticsEvent(event, userId, properties);
+  } catch (err) {
+    console.error(err);
+    return c.json({ error: "Analytics unavailable." }, 503);
+  }
+  return c.json({ ok: true });
+});
+
+// Everything else under /api requires a valid session.
 app.use("/api/*", authMiddleware);
 
-// Who am I — reachable by any signed-in user so the UI can show a
-// "not on the allowlist" screen instead of a hard error.
 app.get("/api/me", (c) => {
   const user = c.get("user");
   return c.json({ email: user.email, allowlisted: user.allowlisted });

@@ -3,8 +3,8 @@ import { supabase } from "./supabase";
 
 /**
  * Client for the retention-brain backend. Every call carries the Supabase
- * session token; the backend verifies it and enforces the allowlist. Analysis
- * is async: `startAnalyze` kicks off a run, poll `getLatest` for the result.
+ * session token; the backend verifies it. Analysis is async: `startAnalyze`
+ * kicks off a run, poll `getLatest` for the result.
  */
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
 
@@ -24,7 +24,7 @@ async function authHeaders(): Promise<Record<string, string>> {
 
 export type Me = { email: string; allowlisted: boolean };
 
-/** Identify the signed-in user + whether they're on the allowlist. */
+/** Identify the signed-in user. `allowlisted` is kept for older UI states. */
 export async function getMe(): Promise<Me> {
   const res = await fetch(`${BASE}/api/me`, { headers: await authHeaders() });
   if (!res.ok) throw new Error(`Auth check failed (${res.status}).`);
