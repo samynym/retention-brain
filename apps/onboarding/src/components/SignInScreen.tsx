@@ -1,11 +1,12 @@
 import { useState } from "react";
+import { track } from "../lib/analytics";
 import { supabase } from "../lib/supabase";
 import { Brandmark } from "./Brandmark";
 
 /**
  * Real entry gate: Supabase magic-link. The dev enters their email, gets a
- * sign-in link, and lands back signed in. OAuth (no separate password) — and
- * the backend enforces an invite allowlist, so only invited emails get in.
+ * sign-in link, and lands back signed in. Supabase creates the user on first
+ * sign-in, so anyone can register and try the tool.
  */
 export function SignInScreen() {
   const [email, setEmail] = useState("");
@@ -17,14 +18,17 @@ export function SignInScreen() {
     if (!addr || state === "sending") return;
     setState("sending");
     setError("");
+    void track("sign_in_link_requested", { domain: addr.split("@")[1]?.toLowerCase() ?? null });
     const { error } = await supabase.auth.signInWithOtp({
       email: addr,
-      options: { emailRedirectTo: window.location.origin },
+      options: { emailRedirectTo: window.location.origin, shouldCreateUser: true },
     });
     if (error) {
+      void track("sign_in_link_error", { message: error.message });
       setError(error.message);
       setState("error");
     } else {
+      void track("sign_in_link_sent", { domain: addr.split("@")[1]?.toLowerCase() ?? null });
       setState("sent");
     }
   }
@@ -104,8 +108,7 @@ export function SignInScreen() {
           className="rise mt-7 max-w-xs text-[12.5px] leading-snug"
           style={{ color: "var(--color-ink-faint)", animationDelay: "210ms" }}
         >
-          Invite-only during the beta — sign-in is restricted to allowlisted
-          team emails.
+          New here? This creates your account and signs you in.
         </p>
       </div>
     </div>

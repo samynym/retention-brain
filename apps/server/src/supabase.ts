@@ -2,8 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 
 /**
  * Service-role Supabase client — server-side only. Bypasses RLS, so it must
- * never be exposed to the browser. Used to verify user tokens, read the
- * allowlist, and persist briefings.
+ * never be exposed to the browser. Used to verify user tokens and persist app
+ * data.
  */
 const url = process.env.SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

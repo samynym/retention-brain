@@ -1,6 +1,6 @@
 import { Brandmark } from "./Brandmark";
 
-/** Signed in, but the email isn't on the beta allowlist. */
+/** Legacy restricted-access state. Open registration should not route here. */
 export function NotAllowedScreen({
   email,
   onSignOut,
@@ -13,7 +13,7 @@ export function NotAllowedScreen({
       <div className="flex w-full max-w-sm flex-col items-center text-center">
         <Brandmark />
         <h1 className="rise mt-9 font-display text-[30px] leading-tight font-medium tracking-[-0.01em]">
-          You're not on the list yet.
+          Access is unavailable.
         </h1>
         <p
           className="rise mt-3 text-[14px] leading-relaxed"
@@ -24,11 +24,11 @@ export function NotAllowedScreen({
               <span className="font-medium" style={{ color: "var(--color-ink)" }}>
                 {email}
               </span>{" "}
-              isn't on the beta allowlist. retention-brain is invite-only right
-              now — ping us to get added.
+              signed in, but this workspace could not be activated. Try
+              signing out and using a different email.
             </>
           ) : (
-            <>This email isn't on the beta allowlist. retention-brain is invite-only right now.</>
+            <>This workspace could not be activated. Try signing in again.</>
           )}
         </p>
         <button
