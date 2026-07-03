@@ -23,7 +23,7 @@ export async function runDemo(opts: { users: string; days: string; seed: string 
   const seed = opts.seed;
   const start = new Date("2026-01-01T00:00:00.000Z");
 
-  console.log(kleur.cyan().bold(`🧠 Loading synthetic stream: ${num_users} users, ${days} days of events`));
+  console.log(kleur.cyan().bold(`Loading synthetic stream: ${num_users} users, ${days} days of events`));
 
   const src = syntheticSource({ num_users, days, seed, start_date: start });
   const events: Event[] = [];
@@ -35,7 +35,7 @@ export async function runDemo(opts: { users: string; days: string; seed: string 
   }
   const timelines = buildTimelines(events);
 
-  console.log(kleur.cyan(`📊 Risk Engine: scoring ${timelines.length} users...`));
+  console.log(kleur.cyan(`Risk Engine: scoring ${timelines.length} users...`));
   const scores = await scoreAll(timelines, { useLLM: false });
   const flagged = scores.filter((s) => s.score >= DEMO_THRESHOLD).sort((a, b) => b.score - a.score);
   console.log(`   • ${kleur.yellow(flagged.length.toString())} users flagged at risk (>=${DEMO_THRESHOLD.toFixed(2)})`);
@@ -55,7 +55,7 @@ export async function runDemo(opts: { users: string; days: string; seed: string 
   }
 
   if (flagged.length > 0 && hasLLMKey()) {
-    console.log(kleur.cyan(`🤖 Intervention Agent: generating plays for top 5...`));
+    console.log(kleur.cyan(`Intervention Agent: generating plays for top 5...`));
     const tlByUser = new Map(timelines.map((t) => [t.user_id, t]));
     const interventions = await generateAll(scores, tlByUser, { threshold: DEMO_THRESHOLD, max: 5 });
     for (const i of interventions) {
@@ -78,7 +78,7 @@ export async function runDemo(opts: { users: string; days: string; seed: string 
   const predEval = evalPredictions(scores, src.ground_truth, DEMO_THRESHOLD);
   console.log(
     kleur.green(
-      `✅ Eval: precision ${predEval.precision.toFixed(2)} / recall ${predEval.recall.toFixed(2)} / F1 ${predEval.f1.toFixed(2)} vs synthetic ground truth`
+      `Eval: precision ${predEval.precision.toFixed(2)} / recall ${predEval.recall.toFixed(2)} / F1 ${predEval.f1.toFixed(2)} vs synthetic ground truth`
     )
   );
 }

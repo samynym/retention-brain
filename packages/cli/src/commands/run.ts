@@ -54,7 +54,7 @@ export async function runRun(opts: { asOf?: string; threshold: string }): Promis
   const asOfTag = asOfSource === "flag" ? " (from --as-of)" : "";
   console.log(
     kleur.cyan().bold(
-      `🧠 Briefing run · cutoff ${now.toISOString()}${asOfTag} · sources: ${enabledNames.join(", ")}`
+      `Briefing run · cutoff ${now.toISOString()}${asOfTag} · sources: ${enabledNames.join(", ")}`
     )
   );
 
@@ -82,7 +82,7 @@ export async function runRun(opts: { asOf?: string; threshold: string }): Promis
   }
 
   const timelines = buildTimelines(events);
-  console.log(kleur.cyan(`📊 Risk scoring ${timelines.length} users...`));
+  console.log(kleur.cyan(`Risk scoring ${timelines.length} users...`));
   const useLLM = hasLLMKey();
   const scores = await scoreAll(timelines, { useLLM, nowIso: now.toISOString() });
   const flagged = scores.filter((s) => s.score >= threshold);
@@ -93,7 +93,7 @@ export async function runRun(opts: { asOf?: string; threshold: string }): Promis
   let interventions: Intervention[] = [];
   if (useLLM && flagged.length > 0) {
     console.log(
-      kleur.cyan(`🤖 Generating interventions for top ${Math.min(TOP_INTERVENTIONS, flagged.length)}...`)
+      kleur.cyan(`Generating interventions for top ${Math.min(TOP_INTERVENTIONS, flagged.length)}...`)
     );
     const tlByUser = new Map(timelines.map((t) => [t.user_id, t]));
     interventions = await generateAll(scores, tlByUser, {
@@ -135,7 +135,7 @@ export async function runRun(opts: { asOf?: string; threshold: string }): Promis
   console.log("");
   console.log(
     kleur.green(
-      `✅ ${flagged.length} flagged · top driver: ${topDriver} · wrote ${outPath}`
+      `${flagged.length} flagged · top driver: ${topDriver} · wrote ${outPath}`
     )
   );
 }

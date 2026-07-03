@@ -1,7 +1,7 @@
 import type { Context, Next } from "hono";
 import { admin } from "./supabase.js";
 
-export type AuthUser = { id: string; email: string; allowlisted: boolean };
+export type AuthUser = { id: string; email: string };
 
 export type Env = { Variables: { user: AuthUser } };
 
@@ -25,11 +25,7 @@ export async function authMiddleware(c: Context<Env>, next: Next) {
   }
   const email = data.user.email.toLowerCase();
 
-  c.set("user", { id: data.user.id, email, allowlisted: true });
+  c.set("user", { id: data.user.id, email });
   await next();
 }
 
-/** Historical gate kept for route compatibility; registration is now open. */
-export async function guardAllowlisted(c: Context<Env>, next: Next) {
-  await next();
-}

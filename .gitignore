@@ -26,3 +26,5 @@ PLAN.md
 .gstack/
 .env.production
 .vercel
+/gtm/
+/tasks/
