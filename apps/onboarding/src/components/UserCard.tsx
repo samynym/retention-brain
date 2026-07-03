@@ -22,14 +22,14 @@ export function UserCard({
   user,
   index,
   delayMs,
-  gmail,
-  onConnectGmail,
 }: {
   user: CardUser;
   index: number;
   delayMs: number;
-  gmail: ConnState;
-  onConnectGmail: () => void;
+  // Still threaded from the parent (Gmail connect state) but unused now that
+  // sending is a compose deep link; kept for a future Gmail-read on the support inbox.
+  gmail?: ConnState;
+  onConnectGmail?: () => void;
 }) {
   const { risk, intervention, events } = user;
   const [showEvidence, setShowEvidence] = useState(false);
@@ -38,16 +38,27 @@ export function UserCard({
   // click into the subject or body and change it.
   const [subject, setSubject] = useState(intervention?.copy.subject ?? "");
   const [body, setBody] = useState(intervention?.copy.body ?? "");
-  const [sendState, setSendState] = useState<"idle" | "sending" | "sent">("idle");
-  const locked = sendState !== "idle";
+  const [opened, setOpened] = useState(false);
 
   const archetype =
     user.archetype ?? `${signalLabel(risk.top_signals[0]?.name ?? "flagged")} risk`;
 
+  // Open a Gmail compose window with the (edited) draft prefilled — the dev
+  // reviews the recipient and copy, then hits send in Gmail. Nothing is sent
+  // automatically. Falls back to the inbox if there's no email on file or the
+  // draft is too long to encode in a URL.
   function send() {
-    if (gmail !== "connected" || sendState !== "idle") return;
-    setSendState("sending");
-    setTimeout(() => setSendState("sent"), 1000);
+    const params = new URLSearchParams();
+    if (user.email) params.set("to", user.email);
+    if (subject) params.set("su", subject);
+    if (body) params.set("body", body);
+    const compose = `https://mail.google.com/mail/?view=cm&fs=1&${params.toString()}`;
+    const url =
+      !user.email || compose.length > 8000
+        ? "https://mail.google.com/mail/u/0/"
+        : compose;
+    window.open(url, "_blank", "noopener,noreferrer");
+    setOpened(true);
   }
 
   return (
@@ -206,21 +217,14 @@ export function UserCard({
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-baseline gap-2">
             <Label>Drafted {channelLabel(intervention.channel).toLowerCase()}</Label>
-            {!locked && (
-              <span
-                className="inline-flex items-center gap-1 text-[11px]"
-                style={{ color: "var(--color-ink-faint)" }}
-              >
-                <PencilGlyph /> editable
-              </span>
-            )}
+            <span
+              className="inline-flex items-center gap-1 text-[11px]"
+              style={{ color: "var(--color-ink-faint)" }}
+            >
+              <PencilGlyph /> editable
+            </span>
           </div>
-          <SendControl
-            gmail={gmail}
-            sendState={sendState}
-            onConnectGmail={onConnectGmail}
-            onSend={send}
-          />
+          <SendControl opened={opened} onSend={send} />
         </div>
 
         <div
@@ -237,7 +241,6 @@ export function UserCard({
             <input
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              disabled={locked}
               spellCheck={false}
               className="email-field mt-1 w-full rounded-md bg-transparent px-2 py-1 text-[14.5px] font-semibold tracking-[-0.005em] focus:outline-none disabled:opacity-100"
               style={{ color: "var(--color-ink)" }}
@@ -246,7 +249,6 @@ export function UserCard({
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            disabled={locked}
             spellCheck={false}
             rows={Math.min(20, body.split("\n").length + 1)}
             className="email-field w-full resize-y bg-transparent px-3 py-3 font-sans text-[13.5px] leading-relaxed focus:outline-none disabled:opacity-100"
@@ -254,7 +256,7 @@ export function UserCard({
           />
         </div>
 
-        {sendState === "sent" && (
+        {opened && (
           <div
             className="fade mt-2.5 flex items-center gap-2 rounded-md border px-3 py-2"
             style={{ borderColor: "var(--color-line-strong)", backgroundColor: "var(--color-raised)" }}
@@ -264,10 +266,10 @@ export function UserCard({
               style={{ backgroundColor: "var(--color-positive)" }}
             />
             <span className="text-[12.5px] font-medium" style={{ color: "var(--color-positive)" }}>
-              Sent via Gmail
+              Draft opened in Gmail
             </span>
             <span className="text-[11.5px]" style={{ color: "var(--color-ink-faint)" }}>
-              mock — nothing actually left this browser
+              review the recipient & copy, then hit send in Gmail
             </span>
           </div>
         )}
@@ -285,71 +287,23 @@ export function UserCard({
           <GhostAction>Skip</GhostAction>
         </div>
         <span className="font-mono text-[10.5px] tracking-[0.04em]" style={{ color: "var(--color-ink-faint)" }}>
-          queue actions land later · sending is mocked
+          Approve / Skip queue locally · drafts open in Gmail to send
         </span>
       </footer>
     </article>
   );
 }
 
-/** Connect-Gmail-then-send control for the email block. */
-function SendControl({
-  gmail,
-  sendState,
-  onConnectGmail,
-  onSend,
-}: {
-  gmail: ConnState;
-  sendState: "idle" | "sending" | "sent";
-  onConnectGmail: () => void;
-  onSend: () => void;
-}) {
-  if (sendState === "sent") {
-    return (
-      <span
-        className="inline-flex items-center gap-1.5 px-2 font-mono text-[11px] tracking-[0.04em] uppercase"
-        style={{ color: "var(--color-positive)" }}
-      >
-        Sent
-      </span>
-    );
-  }
-  if (sendState === "sending") {
-    return (
-      <span className="btn btn-primary px-3 py-1.5 text-[12.5px]" style={{ opacity: 0.85 }}>
-        <MiniSpinner /> Sending…
-      </span>
-    );
-  }
-  if (gmail === "connected") {
-    return (
-      <button
-        type="button"
-        onClick={onSend}
-        className="btn btn-primary px-3 py-1.5 text-[12.5px]"
-      >
-        <GmailGlyph /> Send via Gmail
-      </button>
-    );
-  }
-  if (gmail === "connecting") {
-    return (
-      <span
-        className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[12.5px] font-semibold"
-        style={{ borderColor: "var(--color-line-strong)", color: "var(--color-ink-soft)" }}
-      >
-        <MiniSpinner /> Connecting Gmail…
-      </span>
-    );
-  }
+/** Opens the drafted email in Gmail's compose window (deep link). */
+function SendControl({ opened, onSend }: { opened: boolean; onSend: () => void }) {
   return (
     <button
       type="button"
-      onClick={onConnectGmail}
-      className="btn btn-secondary px-3 py-1.5 text-[12.5px]"
-      title="Connect the Gmail MCP to send drafts from here"
+      onClick={onSend}
+      className="btn btn-primary px-3 py-1.5 text-[12.5px]"
+      title="Opens a Gmail compose window with this draft prefilled — review and send there"
     >
-      <GmailGlyph /> Connect Gmail to send
+      <GmailGlyph /> {opened ? "Reopen in Gmail" : "Open in Gmail"}
     </button>
   );
 }
@@ -413,15 +367,6 @@ function GhostAction({ children, primary = false }: { children: React.ReactNode;
     >
       {children}
     </button>
-  );
-}
-
-function MiniSpinner() {
-  return (
-    <svg className="h-3 w-3 animate-spin" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeOpacity="0.3" strokeWidth="2" />
-      <path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
   );
 }
 

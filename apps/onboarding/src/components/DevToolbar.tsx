@@ -57,7 +57,7 @@ export function DevToolbar({
         onClick={onReset}
         disabled={
           !inOperator &&
-          (phase === "signin" || phase === "checking" || phase === "not_allowed")
+          (phase === "signin" || phase === "checking")
         }
         className="rounded-full px-2.5 py-1 font-mono text-[10px] tracking-[0.04em] uppercase transition-colors disabled:opacity-40"
         style={{ color: "var(--color-ink-soft)" }}

@@ -5,7 +5,6 @@ import { CheckingScreen } from "./components/CheckingScreen";
 import { Shell } from "./components/Chrome";
 import { ConnectScreen } from "./components/ConnectScreen";
 import { DevToolbar } from "./components/DevToolbar";
-import { NotAllowedScreen } from "./components/NotAllowedScreen";
 import { OperatorView } from "./components/OperatorView";
 import { SignInScreen } from "./components/SignInScreen";
 import { track } from "./lib/analytics";
@@ -82,12 +81,8 @@ export function App() {
       try {
         const me = await getMe();
         if (!mounted) return;
-        if (me.allowlisted) {
-          void track("session_started");
-          dispatch({ type: "SESSION_OK", identity: { email: me.email, provider: "email" } });
-        } else {
-          dispatch({ type: "SESSION_DENIED", email: me.email });
-        }
+        void track("session_started");
+        dispatch({ type: "SESSION_OK", identity: { email: me.email, provider: "email" } });
       } catch {
         if (mounted) dispatch({ type: "SESSION_NONE" });
       }
@@ -304,10 +299,6 @@ export function App() {
       {state.phase === "checking" && <CheckingScreen />}
 
       {state.phase === "signin" && <SignInScreen />}
-
-      {state.phase === "not_allowed" && (
-        <NotAllowedScreen email={state.identity?.email ?? ""} onSignOut={handleSignOut} />
-      )}
 
       {state.phase === "connect" && (
         <Shell identity={state.identity} onSignOut={handleSignOut}>

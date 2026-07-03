@@ -13,7 +13,6 @@ import type { Briefing } from "../types/briefing";
 export type Phase =
   | "checking" // verifying the Supabase session on load
   | "signin"
-  | "not_allowed" // legacy gate; open registration no longer routes here
   | "connect"
   | "analyzing"
   | "briefing";
@@ -59,7 +58,6 @@ export type State = {
 
 export type Action =
   | { type: "SESSION_OK"; identity: Identity }
-  | { type: "SESSION_DENIED"; email: string } // legacy restricted session
   | { type: "SESSION_NONE" } // no session — show sign-in
   | { type: "SIGN_OUT" }
   | { type: "CONNECT_START"; id: string; provider?: string }
@@ -98,13 +96,6 @@ export function reducer(state: State, action: Action): State {
         auth: "connected",
         identity: action.identity,
         phase: state.phase === "checking" || state.phase === "signin" ? "connect" : state.phase,
-      };
-    case "SESSION_DENIED":
-      return {
-        ...state,
-        auth: "connected",
-        identity: { email: action.email, provider: "email" },
-        phase: "not_allowed",
       };
     case "SESSION_NONE":
       return { ...initialState, phase: "signin", scenario: state.scenario, view: state.view };

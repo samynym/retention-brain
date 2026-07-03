@@ -16,10 +16,9 @@ export type Nudge = {
 export function briefingNudge(cats: Set<SourceCategory>): Nudge | null {
   const analytics = cats.has("analytics");
   const errors = cats.has("errors");
-  const support = cats.has("support");
 
   // Billing only — the biggest leap is knowing *why*, not just *that*.
-  if (!analytics && !errors && !support) {
+  if (!analytics && !errors) {
     return {
       tone: "prompt",
       headline: "You're seeing who's at risk. Connect analytics to see why.",
@@ -27,24 +26,8 @@ export function briefingNudge(cats: Set<SourceCategory>): Nudge | null {
     };
   }
 
-  // Billing + analytics, but no error or support signal yet.
-  if (analytics && !errors && !support) {
-    return {
-      tone: "prompt",
-      headline: "Add Sentry and your support inbox to catch the other two churn drivers.",
-      body: "You can now see who's churning and the usage pattern behind it. Crash-driven and complaint-driven churn stay invisible until error tracking and support are connected — those are often the most fixable.",
-    };
-  }
-
-  // Analytics present, exactly one of errors/support missing.
-  if (analytics && errors && !support) {
-    return {
-      tone: "prompt",
-      headline: "Connect your support inbox to fold in complaints and sentiment.",
-      body: "Intercom or Crisp lets the brain weigh an angry ticket from three days ago against the same user's drop in usage — the difference between a winnable save and a lost cause.",
-    };
-  }
-  if (analytics && support && !errors) {
+  // Billing + analytics, but no error signal yet.
+  if (analytics && !errors) {
     return {
       tone: "prompt",
       headline: "Connect Sentry to surface crash-driven churn.",
@@ -52,12 +35,12 @@ export function briefingNudge(cats: Set<SourceCategory>): Nudge | null {
     };
   }
 
-  // Billing + (errors or support) but still no analytics — analytics first.
-  if (!analytics && (errors || support)) {
+  // Errors but no analytics — analytics is the strongest predictor, get it next.
+  if (!analytics && errors) {
     return {
       tone: "prompt",
       headline: "Connect analytics to ground the “why” in real usage.",
-      body: "You've got billing plus some signal, but without PostHog, Mixpanel, or Amplitude the usage-decline picture is missing — and that's the strongest churn predictor in the model.",
+      body: "You've got billing plus crash signal, but without PostHog, Mixpanel, or Amplitude the usage-decline picture is missing — and that's the strongest churn predictor in the model.",
     };
   }
 
@@ -65,7 +48,7 @@ export function briefingNudge(cats: Set<SourceCategory>): Nudge | null {
   return {
     tone: "complete",
     headline: "All sources connected — the brain has the full picture.",
-    body: "Billing, usage, errors, and support are joined per user. Every “why” below draws on all four.",
+    body: "Billing, usage, and errors are joined per user. Every “why” below draws on all three.",
   };
 }
 
@@ -83,11 +66,6 @@ export function missingSourceSuggestions(
     out.push({
       label: "Connect error tracking",
       detail: "Sentry — flags crash-driven churn the billing data can't see.",
-    });
-  if (!cats.has("support"))
-    out.push({
-      label: "Connect your support inbox",
-      detail: "Intercom · Crisp — folds in complaints and sentiment.",
     });
   return out;
 }

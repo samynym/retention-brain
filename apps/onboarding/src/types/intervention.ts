@@ -50,11 +50,6 @@ export type Intervention = {
     body: string;
   };
   reasoning: string;
-  predicted_lift: {
-    direction: "positive" | "neutral" | "negative";
-    confidence: "low" | "medium" | "high";
-    note: string;
-  };
   critique?: InterventionCritique;
 };
 

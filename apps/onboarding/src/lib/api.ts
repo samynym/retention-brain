@@ -22,9 +22,8 @@ async function authHeaders(): Promise<Record<string, string>> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export type Me = { email: string; allowlisted: boolean };
+export type Me = { email: string };
 
-/** Identify the signed-in user. `allowlisted` is kept for older UI states. */
 export async function getMe(): Promise<Me> {
   const res = await fetch(`${BASE}/api/me`, { headers: await authHeaders() });
   if (!res.ok) throw new Error(`Auth check failed (${res.status}).`);

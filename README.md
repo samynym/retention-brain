@@ -10,10 +10,28 @@ A per-user retention agent for subscription apps. Reads each user's full timelin
 
 See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the mental model behind both gradients. [`PRODUCT.md`](./PRODUCT.md) and [`SPEC.md`](./SPEC.md) are the full design.
 
+## What's in the repo
+
+```
+packages/core                zod Event/Intervention schemas, timelines, LLM routing (per-role models, non-self-judging critic)
+packages/sources             deterministic synthetic personas with ground-truth churn labels
+packages/sources-mcp         the generic adapter: any MCP server (stdio/HTTP) + a field mapping -> normalized events
+packages/risk-engine         6 weighted heuristic signals blended with an LLM judge; explicit degradation when the judge is down
+packages/intervention-agent  decide-channel -> offer/timing -> compose -> critic pipeline + engineering stabilization tickets
+packages/eval                precision/recall/F1 vs ground truth at pre-registered thresholds
+packages/webhook-receiver    Stripe/RC webhook capture (HMAC + replay defense), re-exposed as an MCP server
+packages/cli                 retb: init, demo, eval, run, webhook-listen, events-mcp-server
+apps/server                  hosted backend (beta): Hono + Supabase auth/Postgres, encrypted source credentials, OAuth-over-MCP
+apps/onboarding              hosted onboarding + briefing UI (VITE_DEMO=1 builds a self-contained demo)
+supabase/                    migrations for the hosted app
+```
+
+The CLI is the product; the hosted app is a small beta of the same brain for people who don't want to self-host.
+
 ## Install in 3 minutes
 
 ```sh
-git clone https://github.com/<you>/retention-brain && cd retention-brain
+git clone https://github.com/samynym/rc-retention-brain && cd rc-retention-brain
 pnpm install
 
 pnpm retb init       # interactive setup — writes .env + a sources template
