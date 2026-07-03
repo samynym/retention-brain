@@ -1,9 +1,9 @@
 {
-  "name": "retention-brain",
+  "name": "@retention-brain/cli",
   "version": "0.0.1",
   "type": "module",
   "bin": {
-    "retention-brain": "./src/index.ts"
+    "retb": "./src/index.ts"
   },
   "scripts": {
     "build": "tsc -b"

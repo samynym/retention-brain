@@ -19,11 +19,6 @@ const sampleIntervention: Intervention = {
   },
   reasoning:
     "channel: usage drop calls for personal email | offer: small discount for wavering paying user | timing: send during work hours when they may check email",
-  predicted_lift: {
-    direction: "positive",
-    confidence: "low",
-    note: "directional only — no historical baseline",
-  },
 };
 
 describe.skipIf(!HAS_KEY)("critique (live LLM)", () => {

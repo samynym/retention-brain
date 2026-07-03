@@ -8,7 +8,7 @@ import { scoreAll, EVAL_SEEDS } from "./index.js";
 // (10 personas including 3 adversarials), heuristic-only:
 //   lapsing mean ≈ 0.43, loyal mean ≈ 0.07, delta ≈ 0.36
 //   threshold 0.4: precision ≈ 0.71, recall ≈ 0.76
-//   threshold 0.5: precision ≈ 0.41, recall ≈ 0.09
+//   threshold 0.5: precision ≈ 0.71, recall ≈ 0.75
 describe("risk engine — heuristic only (held-out seed, pre-registered)", () => {
   it("flags lapsing users at materially higher risk than loyal", async () => {
     const src = syntheticSource({

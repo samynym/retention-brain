@@ -6,7 +6,7 @@
 
 Not "your churn rate is 4.2% this month." That's a dashboard. This is "user_47 just opened your settings page, hit a payment failure 3 days ago, and hasn't logged in for 8 days. Send this email in the next 24 hours, offer a 14-day extension, and here's the actual copy."
 
-It runs continuously in the background once installed.
+You run it on a schedule — cron, CI, or the hosted runner. Each run produces a fresh briefing.
 
 ## The before / after
 
@@ -23,7 +23,7 @@ It runs continuously in the background once installed.
 - It sees the cross-source pattern per user automatically
 - It identifies who's at risk in real time (not after they cancel)
 - It writes personalized copy that references their actual behavior
-- It either drafts the email for review (`--dry-run`) or sends it (`--send`)
+- It drafts the email for review — sending stays behind the trust ladder (approve-each lands in v1.1)
 - It does this for every at-risk user, not just the ones you noticed
 
 ## The user
@@ -60,10 +60,10 @@ TOP 5 — recommended interventions ready to send:
    Send: email · 7-day grace + payment update link · immediate
    ...
 
-To send all: retention-brain run --send
+Drafts saved to ./interventions/ — review and send from your own client.
 ```
 
-You read the briefings, edit the ones you don't like, run `--send` on the rest. Done.
+You read the briefings, edit the ones you don't like, and send them from your own client. Done. (`--send` with approve-each is the v1.1 rung of the trust ladder.)
 
 ## What makes it different from existing tooling
 

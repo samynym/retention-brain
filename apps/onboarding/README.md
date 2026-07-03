@@ -1,16 +1,21 @@
-# onboarding (mockup)
+# onboarding
 
-A clickable front-end **mockup** of the hosted onboarding flow for the
-retention agent. Its only job is to validate the UX and the first-run "wow"
-before the backend exists.
+The hosted onboarding + briefing UI for the retention agent, backed by
+[`apps/server`](../server): Supabase magic-link auth, real source connects
+(key-based Stripe/RevenueCat, OAuth-over-MCP for Sentry/PostHog), and briefings
+rendered from real analyze runs.
 
-**Mock only.** No backend, no real OAuth, no MCP calls, no persistence. State
-lives entirely in memory (`useReducer`).
+It started life as a clickable mockup to validate the first-run "wow", and it
+keeps that mode: `VITE_DEMO=1` builds a fully self-contained demo — mock
+identity, fixture briefings, no backend — that can be hosted and clicked by
+anyone.
 
 ## Run
 
 ```bash
 pnpm --filter @retention-brain/onboarding dev   # http://localhost:5180
+
+VITE_DEMO=1 pnpm --filter @retention-brain/onboarding build   # shareable demo build
 ```
 
 ## Flow
@@ -26,13 +31,16 @@ One in-memory state machine (`src/state/machine.ts`) drives these screens:
    Help Scout / Plain / Intercom) ask *which* tool you use, then connect that
    tool's MCP server — the others stay untouched. Support is email-first because
    most indie devs do support over Gmail, not a ticketing tool. `Analyze`
-   unlocks once ≥1 billing source is connected. Every connect is a ~1s mock.
-2. **Analyzing** — a ~1.5s loader.
+   unlocks once ≥1 billing source is connected. (In the demo build every
+   connect is a ~1s mock.)
+2. **Analyzing** — the async run, polled from the server (a ~1.5s loader in
+   demo mode).
 3. **Briefing** — the hero. Per-user "user-plays": who, why (signals referencing
-   the user's actual mock events), recommended play (channel · offer · timing),
+   the user's actual events), recommended play (channel · offer · timing),
    and the drafted subject + body. The nudge banner above is category-aware. The
-   email can be **edited inline** and **sent via a mock Gmail MCP** connection
-   (connect once, send from any card). Approve / Skip triage is visual only.
+   email can be **edited inline**, then opened as a prefilled Gmail compose
+   draft — you review the recipient and copy and hit send in Gmail; nothing is
+   sent automatically. Approve / Skip triage is visual only.
 4. **Zero-signal** — the honest empty state, reachable via the dev toggle
    (bottom-right). The dev toggle also resets the flow.
 5. **Operator view** — what the person who *shipped* the tool sees across their
@@ -47,8 +55,8 @@ One in-memory state machine (`src/state/machine.ts`) drives these screens:
 
 `src/types/intervention.ts` mirrors `@retention-brain/core`'s `Intervention`,
 `RiskScore`, and `Signal` verbatim. The fixtures in `src/fixtures/briefings.ts`
-conform to those types, so a real backend can drop real objects into the same
-renderer. The four users map to the reason-based routing in `PRODUCT.md`:
+conform to those types, so the demo build and the live backend share one
+renderer. The four demo users map to the reason-based routing in `PRODUCT.md`:
 
 | User | Archetype | Play |
 |---|---|---|

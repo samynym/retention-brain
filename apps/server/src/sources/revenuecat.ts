@@ -19,16 +19,31 @@ type RCCustomer = {
   email?: string;
   attributes?: Record<string, { value?: string } | string | undefined>;
 };
+type RCTimestamp = number | string; // documented as ms epoch; tolerate ISO strings
 type RCSubscription = {
   id?: string;
   product_id?: string;
-  starts_at?: number; // ms epoch
-  current_period_starts_at?: number;
-  current_period_ends_at?: number;
-  ends_at?: number;
+  starts_at?: RCTimestamp;
+  current_period_starts_at?: RCTimestamp;
+  current_period_ends_at?: RCTimestamp;
+  ends_at?: RCTimestamp;
   status?: string; // trialing | active | expired | in_grace_period | in_billing_retry | paused
   auto_renewal_status?: string; // will_renew | will_not_renew | ...
 };
+
+// ~100k customers — guards against a runaway loop without silently truncating
+// a real beta account the way the old hard cap of 50 pages did.
+const MAX_PAGES = 1000;
+
+/** Coerce an RC timestamp (ms epoch, or an ISO string) to ms; undefined if unusable. */
+function toMs(v?: RCTimestamp): number | undefined {
+  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+  if (typeof v === "string") {
+    const t = Date.parse(v);
+    return Number.isNaN(t) ? undefined : t;
+  }
+  return undefined;
+}
 
 async function rcGet<T>(url: string, apiKey: string): Promise<T> {
   const res = await fetch(url, {
@@ -69,11 +84,12 @@ export function revenueCatSource(
 
       let next: string | null = `${BASE}/projects/${projectId}/customers?limit=100`;
       let pages = 0;
-      while (next && pages < 50) {
+      for (; next && pages < MAX_PAGES; pages++) {
         const page: RCList<RCCustomer> = await rcGet(next, apiKey);
         for (const cust of page.items ?? []) {
           const email = emailOf(cust);
           const userId = email ?? cust.id;
+          if (!userId) continue; // can't key an event without an identity
 
           let subs: RCList<RCSubscription>;
           try {
@@ -87,68 +103,72 @@ export function revenueCatSource(
 
           for (const s of subs.items ?? []) {
             const payload = { email, product: s.product_id, status: s.status };
+            const startsAt = toMs(s.starts_at);
+            const periodStart = toMs(s.current_period_starts_at);
+            const cancelMs = toMs(s.ends_at) ?? toMs(s.current_period_ends_at);
 
-            if (inWindow(s.starts_at)) {
-              yield Event.parse({
-                id: `${s.id ?? cust.id}:start`,
-                user_id: userId,
-                kind: s.status === "trialing" ? "subscription.trial_start" : "subscription.purchase",
-                timestamp: iso(s.starts_at!),
-                source: "revenuecat",
-                payload,
-              });
+            // A single malformed record (bad shape, unparseable date) shouldn't
+            // throw and abort the whole backfill — skip it and keep going.
+            const emit = (id: string, kind: string, ms: number) => {
+              try {
+                return Event.parse({
+                  id,
+                  user_id: userId,
+                  kind,
+                  timestamp: iso(ms),
+                  source: "revenuecat",
+                  payload,
+                });
+              } catch (err) {
+                console.warn(`[revenuecat] skipped ${kind} for ${userId}: ${String(err)}`);
+                return null;
+              }
+            };
+
+            if (inWindow(startsAt)) {
+              const e = emit(
+                `${s.id ?? cust.id}:start`,
+                s.status === "trialing" ? "subscription.trial_start" : "subscription.purchase",
+                startsAt!,
+              );
+              if (e) yield e;
             }
 
             // a renewal: a fresh current period that isn't the original start
             if (
-              inWindow(s.current_period_starts_at) &&
-              s.current_period_starts_at !== s.starts_at &&
+              inWindow(periodStart) &&
+              periodStart !== startsAt &&
               (s.status === "active" || s.auto_renewal_status === "will_renew")
             ) {
-              yield Event.parse({
-                id: `${s.id ?? cust.id}:renew`,
-                user_id: userId,
-                kind: "subscription.renewal",
-                timestamp: iso(s.current_period_starts_at!),
-                source: "revenuecat",
-                payload,
-              });
+              const e = emit(`${s.id ?? cust.id}:renew`, "subscription.renewal", periodStart!);
+              if (e) yield e;
             }
 
             // billing trouble → payment failure
             if (
               (s.status === "in_billing_retry" || s.status === "in_grace_period") &&
-              inWindow(s.current_period_starts_at)
+              inWindow(periodStart)
             ) {
-              yield Event.parse({
-                id: `${s.id ?? cust.id}:billing`,
-                user_id: userId,
-                kind: "payment.failure",
-                timestamp: iso(s.current_period_starts_at!),
-                source: "revenuecat",
-                payload,
-              });
+              const e = emit(`${s.id ?? cust.id}:billing`, "payment.failure", periodStart!);
+              if (e) yield e;
             }
 
             // cancel: auto-renew off, or expired
-            const cancelAt = s.ends_at ?? s.current_period_ends_at;
             if (
               (s.auto_renewal_status === "will_not_renew" || s.status === "expired") &&
-              inWindow(cancelAt)
+              inWindow(cancelMs)
             ) {
-              yield Event.parse({
-                id: `${s.id ?? cust.id}:cancel`,
-                user_id: userId,
-                kind: "subscription.cancel",
-                timestamp: iso(cancelAt!),
-                source: "revenuecat",
-                payload,
-              });
+              const e = emit(`${s.id ?? cust.id}:cancel`, "subscription.cancel", cancelMs!);
+              if (e) yield e;
             }
           }
         }
         next = page.next_page ?? null;
-        pages++;
+      }
+      if (next) {
+        console.warn(
+          `[revenuecat] stopped at ${MAX_PAGES} pages; more customers remain unread for project ${projectId}`,
+        );
       }
     },
   };

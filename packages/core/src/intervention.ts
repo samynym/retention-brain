@@ -53,11 +53,6 @@ export const Intervention = z.object({
     body: z.string(),
   }),
   reasoning: z.string(),
-  predicted_lift: z.object({
-    direction: z.enum(["positive", "neutral", "negative"]),
-    confidence: z.enum(["low", "medium", "high"]),
-    note: z.string(),
-  }),
   critique: InterventionCritique.optional(),
 });
 export type Intervention = z.infer<typeof Intervention>;

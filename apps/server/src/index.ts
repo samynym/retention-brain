@@ -5,7 +5,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import Stripe from "stripe";
 import { analyze, type AnalyzeOpts } from "./analyze.js";
-import { authMiddleware, guardAllowlisted, type Env } from "./auth.js";
+import { authMiddleware, type Env } from "./auth.js";
 import { isConnectorKind } from "./connectors.js";
 import { completeConnect, oauthSource, startConnect } from "./oauth.js";
 import { fixtureSource } from "./sources/fixture.js";
@@ -136,18 +136,18 @@ app.use("/api/*", authMiddleware);
 
 app.get("/api/me", (c) => {
   const user = c.get("user");
-  return c.json({ email: user.email, allowlisted: user.allowlisted });
+  return c.json({ email: user.email });
 });
 
 // List the user's connected sources (kind + label, never secrets).
-app.get("/api/sources", guardAllowlisted, async (c) => {
+app.get("/api/sources", async (c) => {
   const user = c.get("user");
   return c.json({ sources: await listSources(user.id) });
 });
 
 // Disconnect a source so it can be reconnected.
 const SOURCE_KINDS: SourceKind[] = ["stripe", "revenuecat", "sentry", "posthog"];
-app.delete("/api/sources/:kind", guardAllowlisted, async (c) => {
+app.delete("/api/sources/:kind", async (c) => {
   const user = c.get("user");
   const kind = c.req.param("kind") as SourceKind;
   if (!SOURCE_KINDS.includes(kind)) return c.json({ error: "Unknown source." }, 400);
@@ -156,7 +156,7 @@ app.delete("/api/sources/:kind", guardAllowlisted, async (c) => {
 });
 
 // Connect Stripe: validate the key, then store it encrypted for this user.
-app.post("/api/sources/stripe", guardAllowlisted, async (c) => {
+app.post("/api/sources/stripe", async (c) => {
   const user = c.get("user");
   const body = await c.req.json().catch(() => ({}) as Record<string, unknown>);
   const key = typeof body.key === "string" ? body.key.trim() : "";
@@ -182,7 +182,7 @@ app.post("/api/sources/stripe", guardAllowlisted, async (c) => {
 });
 
 // Connect RevenueCat: validate the key, resolve the project, store both.
-app.post("/api/sources/revenuecat", guardAllowlisted, async (c) => {
+app.post("/api/sources/revenuecat", async (c) => {
   const user = c.get("user");
   const body = await c.req.json().catch(() => ({}) as Record<string, unknown>);
   const key = typeof body.key === "string" ? body.key.trim() : "";
@@ -198,7 +198,7 @@ app.post("/api/sources/revenuecat", guardAllowlisted, async (c) => {
 });
 
 // Start an OAuth connect flow (Sentry, PostHog). Returns the provider's auth URL.
-app.post("/api/oauth/:provider/start", guardAllowlisted, async (c) => {
+app.post("/api/oauth/:provider/start", async (c) => {
   const user = c.get("user");
   const provider = c.req.param("provider");
   if (!provider || !isConnectorKind(provider)) return c.json({ error: "Unknown provider." }, 400);
@@ -229,7 +229,7 @@ app.get("/api/oauth/callback", async (c) => {
 });
 
 // Allowlist-gated routes.
-app.post("/api/analyze", guardAllowlisted, async (c) => {
+app.post("/api/analyze", async (c) => {
   const user = c.get("user");
   const body = await c.req.json().catch(() => ({}) as Record<string, unknown>);
   const cheap = body.cheap !== false;
@@ -270,7 +270,7 @@ app.post("/api/analyze", guardAllowlisted, async (c) => {
   return c.json({ run });
 });
 
-app.get("/api/status", guardAllowlisted, async (c) => {
+app.get("/api/status", async (c) => {
   const user = c.get("user");
   const briefing = await getLatestBriefing(user.id);
   return c.json({
@@ -279,7 +279,7 @@ app.get("/api/status", guardAllowlisted, async (c) => {
   });
 });
 
-app.get("/api/briefing/latest", guardAllowlisted, async (c) => {
+app.get("/api/briefing/latest", async (c) => {
   const user = c.get("user");
   const briefing = await getLatestBriefing(user.id);
   return c.json({ briefing, run: runs.get(user.id) ?? { state: "idle" } });

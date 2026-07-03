@@ -92,7 +92,7 @@ The implementation cost of supporting all corners is low because the trust level
 
 ## 3. MCP-only source architecture
 
-There is no vendor-specific code in this repo. No `@revenuecat/sdk` import, no Stripe API client, no PostHog HTTP wrapper. Every source is an MCP server, called via the standard MCP Client interface (stdio or HTTP).
+The brain (`packages/*`) contains no vendor-specific code: every source is an MCP server, called via the standard MCP Client interface (stdio or HTTP). The hosted app (`apps/server`) additionally ships thin key-based adapters for Stripe (official SDK) and RevenueCat (REST) because the official Stripe/RevenueCat MCP servers currently lack the date-range event tools the brain needs — the gaps are documented in `examples/mcp.json`, and the adapters exist only until those MCPs close them.
 
 ### Why
 
@@ -271,8 +271,8 @@ This list matters more than the feature list. Each item was considered and inten
 - **In-app native offer channel.** The most-native retention play — issue a StoreKit / Play Billing discount or trial extension directly via your billing platform's API; appears native in-app, no email/push. Defensible against analyst-tier assistants because it's outcome-as-action, not analysis. Lands in v1.1 alongside email + push (v1.1 ships multi-channel from day one of executable interventions).
 - **In-app banner, SMS, Slack DM, WhatsApp Business.** Additional channels available via the same dispatcher interface as user demand surfaces. Not version-tagged — slot in when wanted.
 - **Outcome learning loop.** The `outcomes.jsonl` ledger (coming in v1.1 with the approve flow) is the foundation; the loop that uses it to refine prompts and signal weights lands in v1.2.
-- **Web UI / dashboard.** CLI + markdown briefings only. The briefing IS the UI. (`briefing-view.html` exists as a navigable view for the markdown but is not the primary surface.)
-- **Multi-tenant hosted version.** Runs locally or self-hosted. Hosted is v2.0+ if real-user signal warrants it.
+- **Web UI / dashboard.** The CLI + markdown briefing remains the core surface. `apps/onboarding` is a hosted onboarding + briefing UI (beta) on top of `apps/server`; it renders the same briefing data rather than replacing it.
+- **Multi-tenant hosted version.** Originally slated v2.0+, pulled forward as a small beta: `apps/server` is a multi-tenant hosted backend (Supabase auth + Postgres, AES-256-GCM-encrypted per-user source credentials). Local/self-hosted remains fully supported.
 
 ---
 
@@ -289,9 +289,9 @@ A 12-month projection of the architecture, anchored against the trust ladder and
 
 **Source coverage is not version-tagged.** New sources (Mixpanel, Amplitude, Crisp, Intercom, Firebase, App Store reviews — anything with an MCP server) slot in via `.retention-brain/mcp.json` as the user wants them, independently of the trust-and-execution roadmap above. The MCP-only architecture is precisely what makes this possible.
 
-A hosted service (managed-as-a-service for users who don't want to self-host) is an open question, recorded but not committed — it would be answered by real-install demand, not planned ahead of it.
+A hosted service (managed-as-a-service for users who don't want to self-host) is being tested as a small beta (`apps/server` + `apps/onboarding`); whether it becomes the primary distribution is answered by real-install demand, not planned ahead of it.
 
-The path is intentional: each version unlocks a new corner of the source × trust grid without rebuilding the architecture. Source 5+ is a JSON entry. Trust Level 2 is a per-channel policy file. v1.6's learning loop reads `outcomes.jsonl` and updates weights — no architectural shift.
+The path is intentional: each version unlocks a new corner of the source × trust grid without rebuilding the architecture. Source 5+ is a JSON entry. Trust Level 2 is a per-channel policy file. v1.2's learning loop reads `outcomes.jsonl` and updates weights — no architectural shift.
 
 ---
 

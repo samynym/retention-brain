@@ -96,11 +96,6 @@ If something else is going on, just reply and we'll sort it out.
     },
     reasoning:
       "Involuntary churn from a failed renewal, not a value problem — she's in the app daily. A discount here would be wrong (and train card-failure gaming); the correct play is a frictionless payment-update prompt sent immediately.",
-    predicted_lift: {
-      direction: "positive",
-      confidence: "high",
-      note: "Dunning recovers a large share of failed-card users when the prompt is timely and the value is uncontested.",
-    },
     critique: {
       scores: { relevance: 5, personalization: 5, tone: 4, plausibility: 5 },
       notes:
@@ -180,11 +175,6 @@ If you were stuck on something, tell me what and I'll walk you through it. No pr
     },
     reasoning:
       "She never reached activation, so the driver is onboarding friction, not price. A discount would discount a product she hasn't seen work. The play is a re-onboarding nudge to the specific unused action, timed before the trial lapses.",
-    predicted_lift: {
-      direction: "positive",
-      confidence: "medium",
-      note: "Activation-focused nudges convert a meaningful slice of stalled trials; weaker than a billing fix because intent is unproven.",
-    },
     critique: {
       scores: { relevance: 5, personalization: 4, tone: 5, plausibility: 4 },
       notes:
@@ -259,11 +249,6 @@ If a slightly lighter setup would fit where you're at right now, reply and I'll 
     },
     reasoning:
       "Voluntary slow fade from a genuinely engaged user. Lead with the value he's accumulated (sessions, streak, the export he asked about); a light 15% nudge lowers the re-entry barrier without anchoring him to discounts.",
-    predicted_lift: {
-      direction: "positive",
-      confidence: "medium",
-      note: "Value-recap + small offer re-engages lapsing-but-warm users; the prior habit makes return cheap.",
-    },
     critique: {
       scores: { relevance: 4, personalization: 5, tone: 4, plausibility: 4 },
       notes:
@@ -338,11 +323,6 @@ Either way you're in control — just let me know which.
     },
     reasoning:
       "High-value annual renewal at risk from pure inactivity. Reaching out before the charge converts a likely silent-churn-plus-dispute into a save; the 25% goodwill credit offsets the unused stretch, and offering a pause builds the trust this product depends on.",
-    predicted_lift: {
-      direction: "positive",
-      confidence: "high",
-      note: "Pre-renewal saves on dormant annual plans both retain revenue and avert chargebacks; the timing window is the lever.",
-    },
     critique: {
       scores: { relevance: 5, personalization: 4, tone: 4, plausibility: 5 },
       notes:

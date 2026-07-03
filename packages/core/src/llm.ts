@@ -42,12 +42,6 @@ export function getModelId(role: ModelRole = "structured"): string {
   return DEFAULTS[getProvider()][role];
 }
 
-/** @deprecated use getModelId("structured") */
-export const getDefaultModelId = (): string => getModelId("structured");
-
-/** @deprecated use getModelId("critic") */
-export const getCriticModelId = (): string => getModelId("critic");
-
 export function getModel(role: ModelRole | string = "structured"): LanguageModel {
   // Back-compat: if a model id string is passed (e.g. "claude-opus-4-7"), use it directly.
   const isRole = role === "creative" || role === "structured" || role === "critic";
@@ -58,6 +52,3 @@ export function getModel(role: ModelRole | string = "structured"): LanguageModel
 export function hasLLMKey(): boolean {
   return !!(process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY);
 }
-
-/** @deprecated kept for backward-compat — prefer getModelId() */
-export const MODEL_ID = "claude-sonnet-4-6";

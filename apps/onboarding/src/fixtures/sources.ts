@@ -108,19 +108,6 @@ export const OPTIONAL_SOURCES: SourceDef[] = [
     oauthProvider: "sentry",
     providers: ["Sentry"],
   },
-  {
-    id: "support",
-    name: "Support inbox",
-    blurb: "Gmail · Crisp · Help Scout",
-    category: "support",
-    unlocks: "Complaint & sentiment signal — even a plain email inbox",
-    connectVia: "picker",
-    // Ordered by how common they are at the indie/small-team ICP: email-first,
-    // then the bootstrapped-favorite tools, then the funded-startup one.
-    // MCP-pluggable, so anything with an API can be added beyond this list.
-    providers: ["Gmail", "Crisp", "Help Scout", "Plain", "Intercom"],
-    allowOtherMcp: true,
-  },
 ];
 
 export const ALL_SOURCES: SourceDef[] = [...BILLING_SOURCES, ...OPTIONAL_SOURCES];

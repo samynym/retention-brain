@@ -6,12 +6,6 @@ import { decideTiming } from "./decide-timing.js";
 import { compose } from "./compose.js";
 import { critique } from "./critic.js";
 
-const PLACEHOLDER_LIFT: Intervention["predicted_lift"] = {
-  direction: "positive",
-  confidence: "low",
-  note: "directional only — no historical baseline",
-};
-
 export async function generateIntervention(
   risk: RiskScore,
   timeline: UserTimeline
@@ -49,7 +43,6 @@ export async function generateIntervention(
       timing: timingDecision.timing,
       copy,
       reasoning,
-      predicted_lift: PLACEHOLDER_LIFT,
     };
 
     try {
