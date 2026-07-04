@@ -31,7 +31,7 @@ The CLI is the product; the hosted app is a small beta of the same brain for peo
 ## Install in 3 minutes
 
 ```sh
-git clone https://github.com/samynym/rc-retention-brain && cd rc-retention-brain
+git clone https://github.com/samynym/retention-brain && cd retention-brain
 pnpm install
 
 pnpm retb init       # interactive setup — writes .env + a sources template
